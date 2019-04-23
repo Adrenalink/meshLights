@@ -22,6 +22,11 @@ void sinelon() { // a colored dot sweeping back and forth, with fading trails
   leds[pos] = CHSV(gHue, 255, 192);
 }
 
+void sinelon_white() { // slightly different cylon effect, this one a white dot without the fade to black.
+  int pos = beatsin16(13,0,NUM_LEDS);
+  leds[pos] = CRGB::White;
+}
+
 void rainbow() {
   fill_rainbow(leds, NUM_LEDS, gHue, 7); // FastLED's built-in rainbow generator
 }
@@ -39,7 +44,8 @@ void stepAnimation(int display_mode) {
 
     case 2: // "rainbow" effect, connected!
       rainbow();
-      addGlitter(10);
+      //addGlitter(10);
+      sinelon_white();
       FastLED.show();
     break;
   }
