@@ -3,6 +3,7 @@
 
 // LED animation function prototypes
 void sinelon();
+void sinelon_white();
 void rainbow();
 void addGlitter(fract8 chanceOfGlitter);
 void stepAnimation(int display_mode);
