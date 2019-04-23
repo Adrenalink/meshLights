@@ -20,7 +20,8 @@ void setupMesh() {
   display_mode = ALONE;
   Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
-  //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
+  // mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
+  // mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | REMOTE ); // all types on
   mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before mesh init() so that you can see startup messages
 
   mesh.init(MESH_PREFIX, MESH_PASSWORD, MESH_PORT);
@@ -32,9 +33,8 @@ void setupMesh() {
   mesh.scheduler.addTask(taskSendMessage);
   taskSendMessage.enable();
 
-  // may be able to get rid of this...
-  // make this one the controller if there are no others on the mesh
-  //if (mesh.getNodeList().size() == 0) { amController = true; }
+  // set yourself to the controller if there are no others on the mesh
+  if (mesh.getNodeList().size() == 0) { amController = true; }
 }
 
 void updateMesh() {
