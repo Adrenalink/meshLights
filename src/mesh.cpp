@@ -20,9 +20,9 @@ void setupMesh() {
   display_mode = ALONE;
   Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
-  // mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
-  // mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | REMOTE ); // all types on
-  mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before mesh init() so that you can see startup messages
+  //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
+  mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | MSG_TYPES | REMOTE ); // all types on
+  //mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before mesh init() so that you can see startup messages
 
   mesh.init(MESH_PREFIX, MESH_PASSWORD, MESH_PORT);
   mesh.onReceive(&receivedCallback);
@@ -33,7 +33,7 @@ void setupMesh() {
   mesh.scheduler.addTask(taskSendMessage);
   taskSendMessage.enable();
 
-  // set yourself to the controller if there are no others on the mesh
+  // set yourself to the controller if you're alone on the mesh
   if (mesh.getNodeList().size() == 0) { amController = true; }
 }
 
@@ -92,7 +92,7 @@ void changedConnectionCallback() {
     // ON CHANGE, IF THE NODE COUNT IS "0" THEN THE CONTROLLER IS ALONE AND GOES BACK TO THE "SEEKING" ANIMATION
     if (nodes.size() > 0) {
       display_mode = CONNECTED;
-      // need clock sync data to be sent here?  See nodeTimeAdjustedCallback method.
+      // need clock sync data to be sent here?  I think just leds[pos] needs to be sent... See nodeTimeAdjustedCallback method.
     }
     else {
       display_mode = ALONE;
