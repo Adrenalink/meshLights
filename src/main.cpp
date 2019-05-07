@@ -27,13 +27,13 @@ CRGB leds[NUM_LEDS];
 #define CONNECTED 2
 
 // LED function prototypes
+void setupLEDs();
 void sinelon();
 void sinelon_white();
 void rainbow();
 void addGlitter(fract8 chanceOfGlitter);
 void stepAnimation(int display_mode);
 void shiftHue();
-void setupLEDs();
 
 // Mesh function prototypes
 void receivedCallback(uint32_t from, String &msg);
@@ -50,7 +50,7 @@ int display_mode = ALONE;          // animation type -- init animation as single
 bool amController = false;         // flag to designate that this node is the current controller
 uint16_t gHue = 0;                 // rotating color used to shift the rainbow animation
 uint8_t aloneHue = random(0,254);  // random color set on each reboot, used for the color in the confetti() ("alone") function/animation
-uint8_t animationDelay = random(5,40); // random animation speed, used to create a unique color/vibration scheme for each individual light
+uint8_t animationDelay = random(5,40); // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light
 
 painlessMesh mesh;
 
@@ -77,7 +77,7 @@ void sinelon_white() { // slightly different cylon effect, this one a white dot 
 void confetti()
 {
   // random colored speckles that blink in and fade smoothly
-  fadeToBlackBy(leds, NUM_LEDS, 10);
+  fadeToBlackBy(leds, NUM_LEDS, 10); // a nice fade effect when transitioning back from the connected/rainbow animation
   int pos = random16(NUM_LEDS);
   leds[pos] += CHSV(aloneHue + random8(32), 200, 255); // was random8(64)
 }
@@ -92,10 +92,8 @@ void addGlitter(fract8 chanceOfGlitter) {
 
 void stepAnimation(int display_mode) {
   switch (display_mode) {
-    case 1: // "cylon" effect, searching for connections
-      //sinelon();
+    case 1: // "confetti" effect, searching for connections
       EVERY_N_MILLISECONDS( animationDelay ) { confetti(); }
-      //confetti();
       FastLED.show();
     break;
 
@@ -122,7 +120,7 @@ void setupMesh() {
   Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
   //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
-  mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | MSG_TYPES | REMOTE ); // all types on
+  mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | MSG_TYPES | REMOTE );
   //mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before mesh init() so that you can see startup messages
 
   mesh.init(MESH_PREFIX, MESH_PASSWORD, MESH_PORT);
@@ -185,19 +183,24 @@ void changedConnectionCallback() {
   }
   Serial.println();
 
+  // CONTROLLER ELECTION
   if (lowestNodeID == myNodeID) {
     Serial.printf("Node %u: I am the controller now", myNodeID);
     Serial.println();
     amController = true;
-
-    // AS THE CONTROLLER, IF THE NODE COUNT IS "0" YOU ARE ALONE, GO BACK TO THE "ALONE" ANIMATION
-    if (nodes.size() > 0) { display_mode = CONNECTED; }
-    else { display_mode = ALONE; }
   }
   else {
     Serial.printf("Node %u is the controller now", lowestNodeID);
     Serial.println();
     amController = false;
+  }
+
+  // IF THE NODE COUNT IS "0" GO BACK TO THE "ALONE" ANIMATION
+  if (nodes.size() > 0) {
+    display_mode = CONNECTED;
+  }
+  else {
+    display_mode = ALONE;
   }
 } // changedConnectionCallback
 
