@@ -79,7 +79,7 @@ void confetti()
   // random colored speckles that blink in and fade smoothly
   fadeToBlackBy(leds, NUM_LEDS, 10); // a nice fade effect when transitioning back from the connected/rainbow animation
   int pos = random16(NUM_LEDS);
-  leds[pos] += CHSV(aloneHue + random8(32), 200, 255); // was random8(64)
+  leds[pos] += CHSV(aloneHue + random8(32), 200, 255);
 }
 
 void rainbow() {
@@ -138,7 +138,7 @@ void setupMesh() {
 
 void updateMesh() {
   mesh.update();
-  Serial.printf("\n>>>>> mesh.getNodeTime = %i\n", mesh.getNodeTime());
+  //Serial.printf("\n>>>>> mesh.getNodeTime = %i\n", mesh.getNodeTime());
 
   if (amController && mesh.getNodeList().size() > 0) {
     display_mode = CONNECTED;
