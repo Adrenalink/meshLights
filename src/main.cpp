@@ -121,7 +121,6 @@ void setupMesh() {
 
   mesh.scheduler.addTask(taskSendMessage);
   taskSendMessage.enable();
-
   // temporarily set yourself to the controller if you're alone on the mesh
   if (mesh.getNodeList().size() == 0) { amController = true; }
 }
