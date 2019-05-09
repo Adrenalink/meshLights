@@ -236,7 +236,6 @@ void sortNodeList(SimpleList<uint32_t> &nodes) {
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 void setup() {
-  delay(1000); // giving it a second to start up before setting up LEDs and mesh.
   Serial.begin(115200);
 
   setupLEDs(); // creates a new LED object
