@@ -12,7 +12,7 @@
 #define NUM_LEDS          60
 #define DATA_PIN          13
 #define LED_TYPE          WS2812B   // WS2812B or WS2811?
-#define BRIGHTNESS        128       // built-in with FastLED, range: 0-255 (recall that each pixel uses about 60mA at full brightness, so full strip power consumption is roughly: 60mA * num_LEDs * (BRIGHTNESS/255)
+#define BRIGHTNESS        128       // built-in with FastLED, range: 0-255 (recall that each pixel uses about 60mA at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
 #define FRAMES_PER_SECOND 120
 
 CRGB leds[NUM_LEDS];
@@ -28,7 +28,6 @@ CRGB leds[NUM_LEDS];
 
 // LED function prototypes
 void setupLEDs();
-void sinelon();
 void sinelon_white();
 void rainbow();
 void addGlitter(fract8 chanceOfGlitter);
@@ -50,7 +49,7 @@ int display_mode = ALONE;          // animation type -- init animation as single
 bool amController = false;         // flag to designate that this node is the current controller
 uint16_t gHue = 0;                 // rotating color used to shift the rainbow animation
 uint8_t aloneHue = random(0,254);  // random color set on each reboot, used for the color in the confetti() ("alone") function/animation
-uint8_t animationDelay = random(5,40); // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light
+uint8_t animationDelay = random(5,20); // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light
 
 painlessMesh mesh;
 
@@ -63,13 +62,7 @@ void setupLEDs() {
   FastLED.setBrightness(BRIGHTNESS);
 }
 
-void sinelon() { // a colored dot sweeping back and forth, with fading trails
-  fadeToBlackBy(leds, NUM_LEDS, 20);
-  int pos = beatsin16(22,0,NUM_LEDS);
-  leds[pos] = CHSV(gHue, 255, BRIGHTNESS);
-}
-
-void sinelon_white() { // slightly different cylon effect, this one a white dot without the trails caused by fadeToBlackBy().
+void sinelon_white() { // white cylon effect
   int pos = beatsin16(22,0,NUM_LEDS);
   leds[pos] = CRGB::White;
 }
@@ -92,14 +85,18 @@ void addGlitter(fract8 chanceOfGlitter) {
 
 void stepAnimation(int display_mode) {
   switch (display_mode) {
-    case 1: // "confetti" effect, searching for connections
+    case ALONE: // "confetti" effect, searching for connections
       EVERY_N_MILLISECONDS( animationDelay ) { confetti(); }
       FastLED.show();
     break;
 
-    case 2: // "rainbow" effect, connected!
+    case CONNECTED: // "rainbow" effect, connected!
       rainbow();
-      //addGlitter(10);
+
+      if (amController == true) { // the controller gets a bit of glitter
+        addGlitter(30);
+      }
+
       //sinelon_white();
       FastLED.show();
     break;
@@ -107,7 +104,16 @@ void stepAnimation(int display_mode) {
 } // stepAnimation
 
 void shiftHue() {
-  if (gHue > 254) { gHue = 0; } // keeping things between 0 and 255
+  if (gHue > 254) {
+    gHue = 0; // keeping things between 0 and 255
+
+    if (amController == true && mesh.getNodeList().size() > 0) { // experimental, trying to get animations in sync.  Every time gHue cycles, the controller will send out a "keyframe" to the other nodes.
+      String keyframe_msg = "KEYFRAME";
+      mesh.sendBroadcast(keyframe_msg);
+
+      Serial.printf(">> CONTROLLER KEYFRAME broadcast message sent.\n");
+    }
+  }
   else { gHue++; } // slowly cycle the "base color" through the rainbow
 }
 
@@ -117,11 +123,10 @@ void shiftHue() {
 
 void setupMesh() {
   display_mode = ALONE;
-  Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
+  Task taskSendMessage(TASK_SECOND * 1 , TASK_FOREVER, &sendMessage);
 
-  //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
-  mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | MSG_TYPES | REMOTE );
-  //mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before mesh init() so that you can see startup messages
+  //mesh.setDebugMsgTypes(ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE); // all types on
+  mesh.setDebugMsgTypes(ERROR | MESH_STATUS | STARTUP);  // set before mesh init() so that you can see startup messages
 
   mesh.init(MESH_PREFIX, MESH_PASSWORD, MESH_PORT);
   mesh.onReceive(&receivedCallback);
@@ -138,13 +143,42 @@ void setupMesh() {
 
 void updateMesh() {
   mesh.update();
-  //Serial.printf("\n>>>>> mesh.getNodeTime = %i\n", mesh.getNodeTime());
 
-  if (amController && mesh.getNodeList().size() > 0) {
+  if (amController == true && mesh.getNodeList().size() > 0) {
     display_mode = CONNECTED;
   }
 
   stepAnimation(display_mode);  // check for animation update
+}
+
+void controllerElection() {
+  SimpleList<uint32_t> nodes;
+  uint32_t myNodeID = mesh.getNodeId();
+  uint32_t lowestNodeID = myNodeID;
+
+  nodes = mesh.getNodeList();
+  Serial.printf("Num nodes: %d\n", nodes.size());
+  Serial.printf("Connection list:");
+
+  for (SimpleList<uint32_t>::iterator node = nodes.begin(); node != nodes.end(); ++node) {
+    Serial.printf(" %u", *node);
+    if (*node < lowestNodeID) lowestNodeID = *node;
+  }
+  Serial.println();
+
+  Serial.printf(">> CONTROLLER ELECTION\n");
+  Serial.printf(" > Election result: ");
+
+  if (lowestNodeID == myNodeID) {
+    Serial.printf("I am the controller now (node id: %u)", myNodeID);
+    Serial.println();
+    amController = true;
+  }
+  else {
+    Serial.printf("Node %u is the controller", lowestNodeID);
+    Serial.println();
+    amController = false;
+  }
 }
 
 // send a broadcast message to all the nodes specifying the new animation mode for all of them
@@ -157,45 +191,31 @@ void sendMessage() {
 // this gets called when the designated controller sends a command to start a new animation
 // init any animation specific vars for the new mode, and reset the timer vars
 void receivedCallback( uint32_t from, String &msg ) {
-  Serial.printf("Setting display mode to %s. Received from %u\n", msg.c_str(), from);
-  display_mode = msg.toInt(); // get the new display mode
+  if (msg == "KEYFRAME") { // this is a call from the controller to reset your global hue.  This gets all the rainbow animations synchronized.
+    Serial.printf(">> Keyframe received from %u\n", from);
+    gHue = 0;
+  }
+  else {
+    Serial.printf("Setting display mode to %s. Received from %u\n", msg.c_str(), from);
+    display_mode = msg.toInt(); // get the new display mode
+  }
 } // receivedCallback
 
 void newConnectionCallback(uint32_t nodeId) {
-    Serial.printf("--> startHere: New Connection, nodeId = %u\n", nodeId);
+    Serial.printf("\n--> startHere: New Connection, nodeId = %u\n", nodeId);
 } // newConnectionCallback
 
 // this gets called when a node is added or removed from the mesh, so set the controller to the node with the lowest chip id
 void changedConnectionCallback() {
-  SimpleList<uint32_t> nodes;
-  uint32_t myNodeID = mesh.getNodeId();
-  uint32_t lowestNodeID = myNodeID;
-
   Serial.printf("Changed connections %s\n",mesh.subConnectionJson().c_str());
-
-  nodes = mesh.getNodeList();
-  Serial.printf("Num nodes: %d\n", nodes.size());
-  Serial.printf("Connection list:");
-
-  for (SimpleList<uint32_t>::iterator node = nodes.begin(); node != nodes.end(); ++node) {
-    Serial.printf(" %u", *node);
-    if (*node < lowestNodeID) lowestNodeID = *node;
-  }
-  Serial.println();
+  Serial.printf("\n>>amContoller set to: %s\n", amController ? "true" : "false");
 
   // CONTROLLER ELECTION
-  if (lowestNodeID == myNodeID) {
-    Serial.printf("Node %u: I am the controller now", myNodeID);
-    Serial.println();
-    amController = true;
-  }
-  else {
-    Serial.printf("Node %u is the controller now", lowestNodeID);
-    Serial.println();
-    amController = false;
-  }
+  controllerElection();
 
   // IF THE NODE COUNT IS "0" GO BACK TO THE "ALONE" ANIMATION
+  SimpleList<uint32_t> nodes = mesh.getNodeList();
+
   if (nodes.size() > 0) {
     display_mode = CONNECTED;
   }
@@ -236,6 +256,7 @@ void sortNodeList(SimpleList<uint32_t> &nodes) {
 
 void setup() {
   Serial.begin(115200);
+
   setupLEDs(); // creates a new LED object
   setupMesh(); // creates a new mesh network
 }
@@ -243,4 +264,5 @@ void setup() {
 void loop() {
   updateMesh(); // check connected status and update meshed nodes, checks for controller status and calls stepAnimation()
   EVERY_N_MILLISECONDS( 10 ) { shiftHue(); } // increment base hue for a shifting rainbow effect
+  EVERY_N_MILLISECONDS( 10000 ) { controllerElection(); } // force a controller election on regular intervals
 }
