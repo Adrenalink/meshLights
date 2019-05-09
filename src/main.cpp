@@ -243,7 +243,7 @@ void setup() {
 }
 
 void loop() {
-  updateMesh(); // check connected status and update meshed nodes, checks for controller status and calls stepAnimation()
+  updateMesh(); // management tasks: check connected status, update meshed nodes, check controller status and calls stepAnimation()
 
   EVERY_N_MILLISECONDS( 15 ) { shiftHue(); } // increment base hue for a shifting rainbow effect
   EVERY_N_MILLISECONDS( 20000 ) { controllerElection(); } // force a controller election on regular intervals
