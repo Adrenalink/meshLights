@@ -44,11 +44,11 @@ void nodeTimeAdjustedCallback(int32_t offset);
 void sortNodeList(SimpleList<uint32_t> &nodes);
 
 // Global vars
-int display_mode = ALONE;               // animation type -- init animation as single node
 bool amController = false;              // flag to designate that this node is the current controller
-uint16_t gHue = 0;                      // rotating color used to shift the rainbow animation
-uint8_t aloneHue = random(0,254);       // random color set on each reboot, used for the color in the confetti() ("alone") function/animation
-uint8_t animationDelay = random(5,20);  // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light
+uint8_t display_mode = ALONE;           // animation type -- init animation as single node
+uint8_t aloneHue = random(0,223);       // random color set on each reboot, used for the color in the confetti() ("alone") function/animation, 223 gives room for a random number 0-32 to be added for confetti effect.
+uint8_t animationDelay = random(5,25);  // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light when in "alone" mode
+uint8_t gHue = 0;                       // rotating color used to shift the rainbow animation
 
 painlessMesh mesh; // let there be mesh!
 
@@ -95,7 +95,7 @@ void sendKeyframe() {
 
 void shiftHue() {
   if (gHue > 254) {
-    gHue = 0; // keeping things between 0 and 255
+    gHue = 0; // keeping things between 0 and 255.
     if (amController == true && mesh.getNodeList().size() > 0) { sendKeyframe(); } // as the controller, announce when resetting base hue (gHue)
   }
   else { gHue++; } // slowly cycle the "base color" through the rainbow
@@ -123,7 +123,7 @@ void setupMesh() {
   taskSendMessage.enable();
 
   // temporarily set yourself to the controller if you're alone on the mesh
-  if (mesh.getNodeList().size() == 0) { amController = true; }
+  //if (mesh.getNodeList().size() == 0) { amController = true; }
 }
 
 void updateMesh() {
@@ -155,7 +155,7 @@ void controllerElection() {
   Serial.printf(" > Election result: ");
 
   if (lowestNodeID == myNodeID) {
-    Serial.printf("I am the controller now (node id: %u)", myNodeID);
+    Serial.printf("I am the controller (node id: %u)", myNodeID);
     Serial.println();
     amController = true;
   }
@@ -177,7 +177,8 @@ void sendMessage() {
 // init any animation specific vars for the new mode, and reset the timer vars
 void receivedCallback( uint32_t from, String &msg ) {
   if (msg == "KEYFRAME") { // this is a call from the controller to reset your global hue.  This gets all the rainbow animations synchronized.
-    Serial.printf(" > Keyframe received from %u\n", from);
+    Serial.printf("\n>> KEYFRAME received from %u\n", from);
+    Serial.printf(" > Global hue was: %u\n\n", gHue);
     gHue = 0;
   }
   else {
@@ -193,7 +194,7 @@ void newConnectionCallback(uint32_t nodeId) {
 // this gets called when a node is added or removed from the mesh, so set the controller to the node with the lowest chip id
 void changedConnectionCallback() {
   Serial.printf("Changed connections %s\n",mesh.subConnectionJson().c_str());
-  Serial.printf("\n>>Currently the controller? %s\n", amController ? "YES" : "NO");
+  Serial.printf("\n>> STATUS: Is this node the controller? %s\n", amController ? "YES" : "NO");
 
   // CONTROLLER ELECTION
   controllerElection(); // calling an election when mesh configuration changes
@@ -245,6 +246,6 @@ void setup() {
 void loop() {
   updateMesh(); // management tasks: check connected status, update meshed nodes, check controller status and calls stepAnimation()
 
-  EVERY_N_MILLISECONDS( 15 ) { shiftHue(); } // increment base hue for a shifting rainbow effect
-  EVERY_N_MILLISECONDS( 20000 ) { controllerElection(); } // force a controller election on regular intervals
+  EVERY_N_MILLISECONDS( 20 ) { shiftHue(); } // increment base hue for a shifting rainbow effect
+  EVERY_N_MILLISECONDS( 10000 ) { controllerElection(); } // force a controller election on regular intervals
 }
