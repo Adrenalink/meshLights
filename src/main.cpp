@@ -13,7 +13,6 @@
 #define DATA_PIN          13
 #define LED_TYPE          WS2812B   // WS2812B or WS2811?
 #define BRIGHTNESS        128       // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
-#define FRAMES_PER_SECOND 120
 
 CRGB leds[NUM_LEDS];
 
@@ -132,13 +131,14 @@ void updateMesh() {
     display_mode = CONNECTED;
   }
 
-  stepAnimation(display_mode);  // check for animation update
+  stepAnimation(display_mode);  // animation update
 }
 
 void controllerElection() {
-  SimpleList<uint32_t> nodes;
   uint32_t myNodeID = mesh.getNodeId();
   uint32_t lowestNodeID = myNodeID;
+
+  SimpleList<uint32_t> nodes;
   nodes = mesh.getNodeList();
 
   Serial.printf(">> CONTROLLER ELECTION\n");
@@ -154,13 +154,11 @@ void controllerElection() {
   Serial.printf(" > Election result: ");
 
   if (lowestNodeID == myNodeID) {
-    Serial.printf("I am the controller (node id: %u)", myNodeID);
-    Serial.println();
+    Serial.printf("I am the controller (node id: %u)\n", myNodeID);
     amController = true;
   }
   else {
-    Serial.printf("Node %u is the controller", lowestNodeID);
-    Serial.println();
+    Serial.printf("Node %u is the controller\n", lowestNodeID);
     amController = false;
   }
 }
@@ -174,10 +172,9 @@ void sendMessage() {
 
 // this gets called when the designated controller sends a command to start a new animation
 // init any animation specific vars for the new mode, and reset the timer vars
-void receivedCallback( uint32_t from, String &msg ) {
+void receivedCallback(uint32_t from, String &msg) {
   if (msg == "KEYFRAME") { // this is a call from the controller to reset your global hue.  This gets all the rainbow animations synchronized.
-    Serial.printf("\n>> KEYFRAME received from %u\n", from);
-    Serial.printf(" > Global hue was: %u\n\n", gHue);
+    Serial.printf("\n>> KEYFRAME received from %u.  gHue was %u.\n\n", from, gHue);
     gHue = 0;
   }
   else {
@@ -187,26 +184,30 @@ void receivedCallback( uint32_t from, String &msg ) {
 }
 
 void newConnectionCallback(uint32_t nodeId) {
-    Serial.printf("\n--> startHere: New Connection, nodeId = %u\n", nodeId);
+    Serial.printf("\n--> Start here: New Connection, nodeId = %u\n", nodeId);
 }
 
 // this gets called when a node is added or removed from the mesh, so set the controller to the node with the lowest chip id
 void changedConnectionCallback() {
-  Serial.printf("Changed connections %s\n",mesh.subConnectionJson().c_str());
+  Serial.printf(" > Changed connections %s\n",mesh.subConnectionJson().c_str());
   Serial.printf("\n>> STATUS: Is this node the controller? %s\n", amController ? "YES" : "NO");
 
-  // CONTROLLER ELECTION
-  controllerElection(); // calling an election when mesh configuration changes
+  // calling an election when mesh configuration changes
+  controllerElection();
 
   // IF THE NODE COUNT IS "0" GO BACK TO THE "ALONE" ANIMATION
   SimpleList<uint32_t> nodes = mesh.getNodeList();
 
-  if (nodes.size() > 0) { display_mode = CONNECTED; }
-  else { display_mode = ALONE; }
+  if (nodes.size() > 0) {
+    display_mode = CONNECTED;
+  }
+  else {
+    display_mode = ALONE;
+  }
 }
 
 void nodeTimeAdjustedCallback(int32_t offset) {
-    Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
+    Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(), offset);
 }
 
 // sort the given list of nodes
