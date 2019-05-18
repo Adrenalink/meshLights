@@ -14,8 +14,6 @@
 #define LED_TYPE          WS2812B   // WS2812B or WS2811?
 #define BRIGHTNESS        128       // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
 
-CRGB leds[NUM_LEDS];
-
 // Mesh setup
 #define   MESH_PREFIX     "LEDMesh01"
 #define   MESH_PASSWORD   "foofoofoo"
@@ -49,7 +47,8 @@ uint8_t aloneHue = random(0,223);       // random color set on each reboot, used
 uint8_t animationDelay = random(5,25);  // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light when in "alone" mode
 uint8_t gHue = 0;                       // rotating color used to shift the rainbow animation
 
-painlessMesh mesh; // let there be mesh!
+painlessMesh mesh;   // first there was mesh,
+CRGB leds[NUM_LEDS]; // then there was light!
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // LED FUNCTIONS
@@ -73,7 +72,7 @@ void addGlitter(fract8 chanceOfGlitter) {
 void stepAnimation(int display_mode) {
   switch (display_mode) {
     case ALONE: // "confetti" effect, not part of a mesh, searching for connections
-      EVERY_N_MILLISECONDS( animationDelay ) { confetti(); } // this gives the confetti animation a unique animation rate on each reboot
+      EVERY_N_MILLISECONDS(animationDelay) { confetti(); } // this gives the confetti animation a unique animation rate on each reboot
       FastLED.show();
     break;
 
