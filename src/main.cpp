@@ -119,8 +119,6 @@ void setupMesh() {
 
   mesh.scheduler.addTask(taskSendMessage);
   taskSendMessage.enable();
-  // temporarily set yourself to the controller if you're alone on the mesh
-  //if (mesh.getNodeList().size() == 0) { amController = true; }
 }
 
 void updateMesh() {
@@ -238,8 +236,8 @@ void sortNodeList(SimpleList<uint32_t> &nodes) {
 void setup() {
   Serial.begin(115200);
 
-  setupLEDs(); // creates a new LED object
-  setupMesh(); // creates a new mesh network
+  setupMesh(); // Creates a new mesh network
+  setupLEDs(); // Constructs LED strand as an object and sets brightness
 }
 
 void loop() {
