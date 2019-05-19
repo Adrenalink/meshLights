@@ -9,16 +9,16 @@
 #include <painlessMesh.h>
 
 // LED setup
-#define NUM_LEDS          60
-#define DATA_PIN          13
+#define NUM_LEDS          60        // how many LEDs in your strand?
+#define DATA_PIN          13        // your board's data pin connected to your LEDs
 #define LED_TYPE          WS2812B   // WS2812B or WS2811?
 #define BRIGHTNESS        128       // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
 #define HUE_DELAY         10        // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
 
 // Mesh setup
-#define   MESH_PREFIX     "LEDMesh01"
-#define   MESH_PASSWORD   "foofoofoo"
-#define   MESH_PORT       5555
+#define   MESH_SSID       "LEDMesh01" // the broadcast name of your little mesh network
+#define   MESH_PASSWORD   "foofoofoo" // network password
+#define   MESH_PORT       5555        // in a busy space?  Isolate your mesh with a specific port as well
 #define   ELECTION_DELAY  10          // num seconds between forced controller elections
 
 // Mesh states
@@ -36,6 +36,8 @@ void shiftHue();
 void setupMesh();
 void updateMesh();
 void sendMessage();
+void sendKeyframe();
+void controllerElection();
 void receivedCallback(uint32_t from, String &msg);
 void newConnectionCallback(uint32_t nodeId);
 void changedConnectionCallback();
@@ -44,6 +46,7 @@ void sortNodeList(SimpleList<uint32_t> &nodes);
 
 // Global vars
 bool amController = false;              // flag to designate that this node is the current controller, which sets the mesh-time and pace for cycling animations
+long knownControllerID = 0;             // a little validation that you're getting broadcasts from who you think you expect.  Gets set during a controller election.
 uint8_t displayMode = ALONE;            // animation type -- init animation as single node
 uint8_t aloneHue = random(0,223);       // random color set on each reboot, used for the color in the "alone" animation, 223 gives room for a random number 0-32 to be added for confetti effect.
 uint8_t animationDelay = random(5,20);  // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light when in "alone" mode
@@ -106,14 +109,12 @@ void shiftHue() {
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 void setupMesh() {
-  //displayMode = ALONE;
-
   Task taskSendMessage(TASK_SECOND * 2, TASK_FOREVER, &sendMessage); // every 2 seconds send a message
 
   //mesh.setDebugMsgTypes(ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE); // all types on
   mesh.setDebugMsgTypes(ERROR | MESH_STATUS | STARTUP);  // set before mesh init() so that you can see startup messages
 
-  mesh.init(MESH_PREFIX, MESH_PASSWORD, MESH_PORT);
+  mesh.init(MESH_SSID, MESH_PASSWORD, MESH_PORT);
   mesh.onReceive(&receivedCallback);
   mesh.onNewConnection(&newConnectionCallback);
   mesh.onChangedConnections(&changedConnectionCallback);
@@ -142,7 +143,7 @@ void controllerElection() {
 
   Serial.printf(">> CONTROLLER ELECTION\n");
   Serial.printf(" . Number of nodes in mesh: %d\n", nodes.size() + 1);
-  Serial.printf(" . Other mesh members:");
+  Serial.printf(" . Mesh members: %u (< this node)", myNodeID);
 
   for (SimpleList<uint32_t>::iterator node = nodes.begin(); node != nodes.end(); ++node) {
     Serial.printf(" %u", *node);
@@ -160,6 +161,8 @@ void controllerElection() {
     Serial.printf("Node %u is the controller\n", lowestNodeID);
     amController = false;
   }
+
+  knownControllerID = lowestNodeID;
 }
 
 // send a broadcast message to all the nodes specifying the new animation mode for all of them
@@ -172,10 +175,10 @@ void sendMessage() {
 // this gets called when the designated controller sends a command to start a new animation
 // init any animation specific vars for the new mode, and reset the timer vars
 void receivedCallback(uint32_t from, String &msg) {
-  if (msg == "KEYFRAME") { // this is a call from the controller to reset your global hue.  This gets all the rainbow animations synchronized.
+  // add in logic for message age, if it's too old, ignore.
+  if (msg == "KEYFRAME" && from == knownControllerID) { // this is a call from the controller to reset your global hue.  This gets all the rainbow animations synchronized.
     Serial.printf(">> KEYFRAME received from %u.  Local gHue is %u. ", from, gHue);
 
-    // I'm not sure how well the below works, needs more testing.  It's supposed to keep things smooth -- only change animations if gHue is too far from the controller's.
     if (255-gHue>16 && 255-gHue<240) { // when receiving a KEYFRAME message, only reset the global hue to zero if they're out of sync
       gHue = 0;
       Serial.printf("RESETTING gHue to 0.");
@@ -183,9 +186,12 @@ void receivedCallback(uint32_t from, String &msg) {
 
     Serial.println();
   }
-  else {
-    Serial.printf("Setting display mode to %s. Received from %u\n", msg.c_str(), from);
+  else if (from == knownControllerID) {
+    Serial.printf("Display update from %u.  Setting mode to %s.\n", from, msg.c_str());
     displayMode = msg.toInt(); // get the new display mode
+  }
+  else {
+    Serial.printf("!! IGNORE: discarding message from %u, who is not the known controller at this time.\n", from);
   }
 }
 
@@ -196,7 +202,7 @@ void newConnectionCallback(uint32_t nodeId) {
 // this gets called when a node is added or removed from the mesh, so set the controller to the node with the lowest chip id
 void changedConnectionCallback() {
   Serial.printf("\n> Changed connections %s\n",mesh.subConnectionJson().c_str());
-  Serial.printf("\n>> STATUS: Is this node the controller? %s\n", amController ? "YES" : "NO");
+  Serial.printf("\n>> STATUS: Am I the controller? %s\n", amController ? "YES" : "NO");
 
   // calling an election when mesh configuration changes
   controllerElection();
