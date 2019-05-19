@@ -13,11 +13,13 @@
 #define DATA_PIN          13
 #define LED_TYPE          WS2812B   // WS2812B or WS2811?
 #define BRIGHTNESS        128       // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
+#define HUE_DELAY         10        // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
 
 // Mesh setup
 #define   MESH_PREFIX     "LEDMesh01"
 #define   MESH_PASSWORD   "foofoofoo"
 #define   MESH_PORT       5555
+#define   ELECTION_DELAY  10          // num seconds between forced controller elections
 
 // Mesh states
 #define ALONE     1
@@ -44,7 +46,7 @@ void sortNodeList(SimpleList<uint32_t> &nodes);
 bool amController = false;              // flag to designate that this node is the current controller, which sets the mesh-time and pace for cycling animations
 uint8_t display_mode = ALONE;           // animation type -- init animation as single node
 uint8_t aloneHue = random(0,223);       // random color set on each reboot, used for the color in the "alone" animation, 223 gives room for a random number 0-32 to be added for confetti effect.
-uint8_t animationDelay = random(5,25);  // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light when in "alone" mode
+uint8_t animationDelay = random(5,20);  // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light when in "alone" mode
 uint8_t gHue = 0;                       // global, rotating color used to shift the rainbow animation
 
 painlessMesh mesh;   // first there was mesh,
@@ -173,7 +175,7 @@ void receivedCallback(uint32_t from, String &msg) {
   if (msg == "KEYFRAME") { // this is a call from the controller to reset your global hue.  This gets all the rainbow animations synchronized.
     Serial.printf(">> KEYFRAME received from %u.  Local gHue is %u. ", from, gHue);
 
-    // I'm not sure how well the below works, needs more testing.  It's supposed to keep things smooth -- only change your animation if your gHue is too far from the controller's.
+    // I'm not sure how well the below works, needs more testing.  It's supposed to keep things smooth -- only change animations if gHue is too far from the controller's.
     if (255-gHue>16 && 255-gHue<240) { // when receiving a KEYFRAME message, only reset the global hue to zero if they're out of sync
       gHue = 0;
       Serial.printf("RESETTING gHue to 0.");
@@ -250,6 +252,6 @@ void setup() {
 void loop() {
   updateMesh(); // management tasks: check connected status, update meshed nodes, check controller status and calls stepAnimation()
 
-  EVERY_N_MILLISECONDS(20) { shiftHue(); } // increment base hue for a shifting rainbow effect
-  EVERY_N_SECONDS(10) { controllerElection(); } // force a controller election on regular intervals
+  EVERY_N_MILLISECONDS(HUE_DELAY) { shiftHue(); } // increment base hue for a shifting rainbow effect
+  EVERY_N_SECONDS(ELECTION_DELAY) { controllerElection(); } // force a controller election on regular intervals
 }
