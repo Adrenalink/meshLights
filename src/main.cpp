@@ -28,7 +28,7 @@
 // LED function prototypes
 void setupLEDs();
 void addGlitter(fract8 chanceOfGlitter);
-void stepAnimation(int display_mode);
+void stepAnimation(int displayMode);
 void sendKeyframe();
 void shiftHue();
 
@@ -44,7 +44,7 @@ void sortNodeList(SimpleList<uint32_t> &nodes);
 
 // Global vars
 bool amController = false;              // flag to designate that this node is the current controller, which sets the mesh-time and pace for cycling animations
-uint8_t display_mode = ALONE;           // animation type -- init animation as single node
+uint8_t displayMode = ALONE;            // animation type -- init animation as single node
 uint8_t aloneHue = random(0,223);       // random color set on each reboot, used for the color in the "alone" animation, 223 gives room for a random number 0-32 to be added for confetti effect.
 uint8_t animationDelay = random(5,20);  // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light when in "alone" mode
 uint8_t gHue = 0;                       // global, rotating color used to shift the rainbow animation
@@ -68,11 +68,11 @@ void confetti() { // random colored speckles that blink in and fade smoothly
 }
 
 void addGlitter(fract8 chanceOfGlitter) {
-  if (random8() < chanceOfGlitter) { leds[ random16(NUM_LEDS) ] += CRGB::White; }
+  if (random8() < chanceOfGlitter) { leds[random16(NUM_LEDS)] += CRGB::White; }
 }
 
-void stepAnimation(int display_mode) {
-  switch (display_mode) {
+void stepAnimation(int displayMode) {
+  switch (displayMode) {
     case ALONE: // "confetti" effect, not part of a mesh, searching for connections
       EVERY_N_MILLISECONDS(animationDelay) { confetti(); } // this gives the confetti animation a unique animation rate on each reboot
       FastLED.show();
@@ -106,9 +106,9 @@ void shiftHue() {
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 void setupMesh() {
-  display_mode = ALONE;
+  //displayMode = ALONE;
 
-  Task taskSendMessage(TASK_SECOND * 2 , TASK_FOREVER, &sendMessage); // every 2 seconds send a message
+  Task taskSendMessage(TASK_SECOND * 2, TASK_FOREVER, &sendMessage); // every 2 seconds send a message
 
   //mesh.setDebugMsgTypes(ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE); // all types on
   mesh.setDebugMsgTypes(ERROR | MESH_STATUS | STARTUP);  // set before mesh init() so that you can see startup messages
@@ -127,10 +127,10 @@ void updateMesh() {
   mesh.update();
 
   if (amController == true && mesh.getNodeList().size() > 0) {
-    display_mode = CONNECTED;
+    displayMode = CONNECTED;
   }
 
-  stepAnimation(display_mode);  // animation update
+  stepAnimation(displayMode);  // animation update
 }
 
 void controllerElection() {
@@ -165,7 +165,7 @@ void controllerElection() {
 // send a broadcast message to all the nodes specifying the new animation mode for all of them
 void sendMessage() {
   String msg;
-  msg += String(display_mode);
+  msg += String(displayMode);
   mesh.sendBroadcast(msg);
 }
 
@@ -185,7 +185,7 @@ void receivedCallback(uint32_t from, String &msg) {
   }
   else {
     Serial.printf("Setting display mode to %s. Received from %u\n", msg.c_str(), from);
-    display_mode = msg.toInt(); // get the new display mode
+    displayMode = msg.toInt(); // get the new display mode
   }
 }
 
@@ -205,10 +205,10 @@ void changedConnectionCallback() {
   SimpleList<uint32_t> nodes = mesh.getNodeList();
 
   if (nodes.size() > 0) {
-    display_mode = CONNECTED;
+    displayMode = CONNECTED;
   }
   else {
-    display_mode = ALONE;
+    displayMode = ALONE;
   }
 }
 
