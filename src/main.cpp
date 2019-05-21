@@ -48,9 +48,9 @@ void sortNodeList(SimpleList<uint32_t> &nodes);
 // Global vars
 bool amController = false;              // flag to designate that this node is the current controller, which sets the mesh-time and pace for cycling animations
 long knownControllerID = 0;             // a little validation that you're getting broadcasts from who you expect.  Gets set during a controller election.
-uint8_t displayMode = ALONE;            // animation type -- init animation as single node
+uint8_t displayMode = ALONE;            // animation type -- init animation as single node.  Can be set to either ALONE or CONNECTED.
 uint8_t aloneHue = random(0,223);       // random color set on each reboot, used for the color in the "alone" animation, 223 gives room for a random number 0-32 to be added for confetti effect.
-uint8_t animationDelay = random(5,20);  // random animation speed, between (x,y), used to create a unique color/vibration scheme for each individual light when in "alone" mode
+uint8_t animationDelay = random(5,20);  // random animation speed, between (x,y) milliseconds, used to create a unique color/vibration scheme for each individual light when in "alone" mode
 uint8_t gHue = 0;                       // global, rotating color used to shift the rainbow animation
 
 Scheduler userScheduler;
@@ -118,7 +118,7 @@ void stepAnimation(int displayMode) {
       // FastLED's built-in rainbow generator
       fill_rainbow(leds, NUM_LEDS, gHue, 7);
       
-      // the controller gets a bit of glitter
+      // the controller gets a bit of glitter for visual identification
       if (amController == true) { addGlitter(30); }
       
       FastLED.show();
@@ -246,7 +246,7 @@ void receivedCallback(uint32_t from, String &jsonString) {
 
     // message time in transit is within bounds
     if (messageAge < MAX_MESSAGE_AGE) {
-      // when receiving a KEYFRAME message, only reset the global hue to zero if they're out of sync (gHue is within range and message age) 
+      // when receiving a KEYFRAME message, only reset the global hue to zero if it's out of sync
       if (255-gHue>16 && 255-gHue<240) { 
         gHue = 0;
         Serial.printf("RESETTING gHue to 0.");
@@ -269,12 +269,12 @@ void receivedCallback(uint32_t from, String &jsonString) {
 }
 
 void newConnectionCallback(uint32_t nodeId) {
-    Serial.printf("\n--> Start here: New Connection, nodeId = %u\n", nodeId);
+    Serial.printf("\n>> NEW CONNECTION, nodeId = %u\n", nodeId);
 }
 
 // this gets called when a node is added or removed from the mesh, so set the controller to the node with the lowest chip id
 void changedConnectionCallback() {
-  Serial.printf("\n> Changed connections %s\n",mesh.subConnectionJson().c_str());
+  Serial.printf("\n > CHANGED CONNECTIONS: %s\n",mesh.subConnectionJson().c_str());
   Serial.printf("\n>> STATUS: Am I the controller? %s\n", amController ? "YES" : "NO");
 
   // calling an election when mesh configuration changes
