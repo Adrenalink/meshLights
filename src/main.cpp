@@ -242,7 +242,7 @@ void receivedCallback(uint32_t from, String &jsonString) {
   if (receivedMessage == "KEYFRAME" && from == knownControllerID) { 
     // time between sending and receiving a broadcast, in microseconds.  Rolls over every 71 minutes.
     long messageAge = mesh.getNodeTime() - timeStamp; 
-    Serial.printf(">> KEYFRAME received from %u.  Local gHue is %u.  Timestamp: %ld (offset: %ld). ", from, gHue, timeStamp, messageAge);
+    Serial.printf(">> KEYFRAME received from %u.  Local gHue is %u.  Timestamp: %ld (time in transit: %d ms). ", from, gHue, timeStamp, messageAge/1000);
 
     // message time in transit is within bounds
     if (messageAge < MAX_MESSAGE_AGE) {
