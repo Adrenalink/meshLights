@@ -292,7 +292,7 @@ void changedConnectionCallback() {
 }
 
 void nodeTimeAdjustedCallback(int32_t offset) {
-    Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(), offset);
+    Serial.printf(" > TIME: Adjusted time to %u, Offset was %d.\n", mesh.getNodeTime(), offset);
 }
 
 // sort the given list of nodes
