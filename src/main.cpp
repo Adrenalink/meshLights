@@ -254,7 +254,7 @@ void receivedCallback(uint32_t from, String &jsonString) {
     }
     else {
       // divide by 1,000 to convert microseconds to milliseconds.
-      Serial.printf("IGNORED: discarding message from %u, The message is older than %ld ms.", from, MAX_MESSAGE_AGE/1000); 
+      Serial.printf("IGNORED: discarding message from %u, The message is older than %d ms.", from, MAX_MESSAGE_AGE/1000); 
     }
 
   Serial.println();
