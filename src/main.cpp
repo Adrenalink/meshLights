@@ -1,8 +1,10 @@
-#define FASTLED_INTERNAL // this needs to come before #include <FastLED.h> to suppress pragma messages during compile time in the Arduino IDE.
 /*
  *  Meshed ESP32 nodes with synchronized animation effects
  *  some code was based on FastLED 100 line "demo reel" and LED_Synch_Mesh_Send by Carl F Sutter (2017)
  */
+
+#define FASTLED_INTERNAL // this needs to come before #include <FastLED.h> to suppress pragma messages during compile time in the Arduino IDE.
+#define ARDUINOJSON_USE_LONG_LONG 1// default to 'long long' rather than just 'long', node time is calculated in microseconds, giving the json library some sizing expectations.
 
 #include <Arduino.h>
 #include <FastLED.h>
@@ -214,6 +216,7 @@ void controllerElection() {
 // send a broadcast message to all the nodes specifying the new animation mode for all of them
 void sendMessage(String *msg) {
   String currentTime = String(mesh.getNodeTime());
+  Serial.printf("DEBUG: sending message at nodeTime %u\n", mesh.getNodeTime());
   String json_msg;
 
   if (*msg == "KEYFRAME") {
@@ -236,28 +239,40 @@ void receivedCallback(uint32_t from, String &jsonString) {
   if (jsonError) { Serial.printf("!! ERROR: deserializeJson() failed: %s", jsonError.c_str()); }
   
   String receivedMessage = jsonDoc["msg"];
-  long timeStamp = jsonDoc["timestamp"];
+  uint32_t timeStamp = jsonDoc["timestamp"];
 
   // this is a call from the controller to reset your global hue.  This gets all the rainbow animations synchronized.
   if (receivedMessage == "KEYFRAME" && from == knownControllerID) { 
-    // time between sending and receiving a broadcast, in microseconds.  Rolls over every 71 minutes.
-    long messageAge = mesh.getNodeTime() - timeStamp; 
-    Serial.printf(">> KEYFRAME received from %u.  Local gHue is %u.  Timestamp: %ld (time in transit: %d ms). ", from, gHue, timeStamp, messageAge/1000);
-
+    // time between sending and receiving a broadcast, in microseconds.  Rolls over every 71 minutes because uint32_t will overflow.
+    uint32_t messageAge = mesh.getNodeTime() - timeStamp; 
+    Serial.printf(">> KEYFRAME received from %u.  Local gHue is %u.  Timestamp: %zu (time in transit: %zu ms). ", from, gHue, timeStamp, messageAge/1000);
+    
     // message time in transit is within bounds
     if (messageAge < MAX_MESSAGE_AGE) {
       // when receiving a KEYFRAME message, only reset the global hue to zero if it's out of sync
-      if (255-gHue>16 && 255-gHue<240) { 
+      if (255-gHue>12 && 255-gHue<243) { 
         gHue = 0;
         Serial.printf("RESETTING gHue to 0.");
       }
+
+      // clocks must be off if a message has a negative "age" -- if that's the case, initiate a clock sync via painlessmesh
+      if (messageAge < 0) {
+        //mesh.startTimeSync(); <<<< this logic shold be moved to the controller / sendMessage (too).   filter for <= 0 there.
+      }
     }
+
     else {
       // divide by 1,000 to convert microseconds to milliseconds.
       Serial.printf("IGNORED: discarding message from %u, The message is older than %d ms.", from, MAX_MESSAGE_AGE/1000); 
     }
 
   Serial.println();
+  
+  //String output;
+  //serializeJson(jsonDoc, output);
+  
+  //Serial.printf("                   jsonDoc: %s\n", output);
+  //Serial.printf("                                    receivedMessage timeStamp: %lu\n", timeStamp);
   }
 
   else if (from == knownControllerID) {
