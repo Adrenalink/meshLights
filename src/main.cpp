@@ -213,7 +213,6 @@ void controllerElection() {
 // send a broadcast message to all the nodes specifying the new animation mode for all of them
 void sendMessage(String *msg) {
   String currentTime = String(mesh.getNodeTime());
-  //Serial.printf("DEBUG: sending message at nodeTime %u\n", mesh.getNodeTime());
   String json_msg;
 
   if (*msg == "KEYFRAME") {
@@ -230,8 +229,6 @@ void sendMessage(String *msg) {
 // this gets called when the designated controller sends a command to start a new animation
 // init any animation specific vars for the new mode, and reset the timer vars
 void receivedCallback(uint32_t from, String &jsonString) {
-  //uint32_t startJsonTime = mesh.getNodeTime();
-  
   StaticJsonDocument<200> jsonDoc;
 
   DeserializationError jsonError = deserializeJson(jsonDoc, jsonString);
