@@ -239,25 +239,21 @@ void receivedCallback(uint32_t from, String &jsonString) {
   
   String receivedMessage = jsonDoc["msg"];
   uint32_t timeStamp = jsonDoc["timestamp"];
-
-  //uint32_t endJsonTime = mesh.getNodeTime();
-  //uint32_t totalJsonTime = endJsonTime - startJsonTime;
-  //Serial.printf("DEBUG: json processing time: %zu\n", totalJsonTime);
-
+  
   // this is a call from the controller to reset your global hue.  This gets all the rainbow animations synchronized.
   if (receivedMessage == "KEYFRAME" && from == knownControllerID) { 
     // time between sending and receiving a broadcast, in microseconds.  Rolls over every 71 minutes because uint32_t will overflow.
     uint32_t currentTime = mesh.getNodeTime();
     uint32_t messageAge = currentTime - timeStamp;
 
-    Serial.printf(">> KEYFRAME from %u:  Message timestamp: %zu, time in transit: %zu ms. Local gHue is %u. ", from, timeStamp, messageAge/1000, gHue);
+    Serial.printf(">> KEYFRAME from %u -- Timestamp: %zu, offset: %zu ms. Local gHue is %u. ", from, timeStamp, messageAge/1000, gHue);
     
     // message time in transit is within bounds
     if (messageAge < MAX_MESSAGE_AGE) {
       // when receiving a KEYFRAME message, only reset the global hue to zero if it's out of sync
       if (255-gHue>12 && 255-gHue<243) { 
         gHue = 0;
-        Serial.printf("RESETTING gHue to 0.");
+        Serial.printf("(RESETTING gHue to 0.)");
       }
 
       // clocks must be off if a message has a negative "age" -- if that's the case, initiate a clock sync via painlessmesh
@@ -277,7 +273,7 @@ void receivedCallback(uint32_t from, String &jsonString) {
 
     else {
       // divide by 1,000 to convert microseconds to milliseconds.
-      Serial.printf("IGNORED: discarding message from %u, The message is older than %d ms.", from, MAX_MESSAGE_AGE/1000); 
+      Serial.printf("(IGNORED: message is older than %zu ms.)", MAX_MESSAGE_AGE/1000); 
     }
 
   Serial.println();
@@ -298,7 +294,7 @@ void newConnectionCallback(uint32_t nodeId) {
 // this gets called when a node is added or removed from the mesh, so set the controller to the node with the lowest chip id
 void changedConnectionCallback() {
   Serial.printf("\n > CHANGED CONNECTIONS: %s\n",mesh.subConnectionJson().c_str());
-  Serial.printf("\n>> STATUS: Am I the controller? %s\n", amController ? "YES" : "NO");
+  //Serial.printf("\n>> STATUS: Am I the controller? %s\n", amController ? "YES" : "NO");
 
   // calling an election when mesh configuration changes
   controllerElection();
@@ -315,7 +311,7 @@ void changedConnectionCallback() {
 }
 
 void nodeTimeAdjustedCallback(int32_t offset) {
-    Serial.printf(" > TIME: Adjusted time to %u, Offset was %d.\n", mesh.getNodeTime(), offset);
+    Serial.printf(" + TIME: Adjusted time to %u, Offset was %d.\n", mesh.getNodeTime(), offset);
 }
 
 // sort the given list of nodes
