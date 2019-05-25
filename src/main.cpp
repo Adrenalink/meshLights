@@ -205,8 +205,25 @@ void controllerElection() {
     Serial.printf("Node %u is the controller\n", lowestNodeID);
     amController = false;
   }
+  
+  // RSSI is the relative received signal strength in a wireless environment.  The higher the number, the stronger the signal.
+  if (WiFi.isConnected()) {
+     String signalHealth;
+
+    if (WiFi.RSSI() > -60) { signalHealth = "GREAT"; }
+    if (WiFi.RSSI() <= -60 && WiFi.RSSI() > -70) { signalHealth = "GOOD"; }
+    if (WiFi.RSSI() <= -70 && WiFi.RSSI() > -90) { signalHealth = "WEAK"; }
+    if (WiFi.RSSI() <= -90 && WiFi.RSSI() > -100) { signalHealth = "BAD"; }
+    if (WiFi.RSSI() <= -100) { signalHealth = "*VERY BAD*"; }
+  
+    Serial.printf(" . Signal strength: %s, %ddBm\n", signalHealth.c_str(), WiFi.RSSI());
+  }
+  else {
+    Serial.printf(" . NO CONNECTION INFO AVAILABLE\n");
+  }
 
   Serial.println();
+
   knownControllerID = lowestNodeID;
 }
 
@@ -253,7 +270,7 @@ void receivedCallback(uint32_t from, String &jsonString) {
         Serial.printf("(RESETTING gHue to 0.)");
       }
 
-      // clocks must be off if a message has a negative "age" -- if that's the case, initiate a clock sync via painlessmesh
+      // clocks must be off if a message has a negative "age"
       if (messageAge < 0) {
         timeErrors++;
 
@@ -269,7 +286,7 @@ void receivedCallback(uint32_t from, String &jsonString) {
     }
 
     else {
-      // divide by 1,000 to convert microseconds to milliseconds.
+      // discard older messages.  Divide by 1,000 to convert microseconds to milliseconds.
       Serial.printf("(IGNORED: message is older than %zu ms.)", MAX_MESSAGE_AGE/1000); 
     }
 
@@ -291,8 +308,7 @@ void newConnectionCallback(uint32_t nodeId) {
 // this gets called when a node is added or removed from the mesh, so set the controller to the node with the lowest chip id
 void changedConnectionCallback() {
   Serial.printf("\n > CHANGED CONNECTIONS: %s\n",mesh.subConnectionJson().c_str());
-  //Serial.printf("\n>> STATUS: Am I the controller? %s\n", amController ? "YES" : "NO");
-
+ 
   // calling an election when mesh configuration changes
   controllerElection();
 
