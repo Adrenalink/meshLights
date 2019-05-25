@@ -219,7 +219,7 @@ void controllerElection() {
     Serial.printf(" . Signal strength: %s, %ddBm\n", signalHealth.c_str(), WiFi.RSSI());
   }
   else {
-    Serial.printf(" . NO CONNECTION INFO AVAILABLE\n");
+    Serial.printf(" . NO WIFI CONNECTION INFO AVAILABLE\n");
   }
 
   Serial.println();
