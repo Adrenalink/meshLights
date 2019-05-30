@@ -16,7 +16,9 @@
 #define DATA_PIN          13           // your board's data pin connected to your LEDs
 #define LED_TYPE          WS2812B      // WS2812B or WS2811?
 #define BRIGHTNESS        128          // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
-#define HUE_DELAY         10           // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
+#define HUE_DELAY         5            // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
+#define AMOUNT_OF_GLITTER 40           // "glitter" effect applied to the controller node for visual identification.  range: 0-255, 30-50 look good without being overwhelming.
+#define FADE_BY_DISTANCE  true         // boolean that makes the brightness of the LEDs based on wifi signal strength.  Set to false if you want them to use the global BRIGHTNESS value instead.
 
 // Mesh setup
 #define   MESH_SSID       "LEDMesh01"  // the broadcast name of your little mesh network
@@ -25,7 +27,7 @@
 #define   ELECTION_DELAY  10           // num seconds between forced controller elections
 #define   MESSAGE_DELAY   2            // num seconds between broadcast messages
 #define   MAX_MESSAGE_AGE 250000       // num microseconds ago that a message from the controller can be acted upon. (250,000 microseconds = 250 milliseconds(ms), which seems to work well)
-#define   MAX_TIME_ERRORS 3            // num of sequential messages with time/clock errors before triggering a manual time sync
+#define   MAX_TIME_ERRORS 3            // num of sequential messages with time/clock errors before triggering a manual time sync (< currently this only logs that there are time errors, haven't added the forced time update yet)
 
 // Mesh states
 #define ALONE     1
@@ -119,11 +121,19 @@ void stepAnimation(int displayMode) {
 
     // "rainbow" effect, you're connected!
     case CONNECTED:
+      // another data dimension, but might be annoying.  Fades the brightness of the LEDs depending on the wifi signal strength.
+      if (FADE_BY_DISTANCE) {
+        uint8_t newBrightness = BRIGHTNESS - (-1 * WiFi.RSSI());
+        //Serial.printf(" Setting brightness to %d\n", newBrightness);
+      
+        FastLED.setBrightness(newBrightness);
+      }
+      
       // FastLED's built-in rainbow generator
       fill_rainbow(leds, NUM_LEDS, gHue, 7);
       
       // the controller gets a bit of glitter for visual identification
-      if (amController == true) { addGlitter(30); }
+      if (amController == true) { addGlitter(AMOUNT_OF_GLITTER); }
       
       FastLED.show();
     break;
@@ -207,19 +217,28 @@ void controllerElection() {
   }
   
   // RSSI is the relative received signal strength in a wireless environment.  The higher the number, the stronger the signal.
-  if (WiFi.isConnected()) {
-     String signalHealth;
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.printf(" . NO WIFI CONNECTION INFO AVAILABLE\n");
+  }
+  else {
+    String signalHealth;
 
+    // these values may need to by tweaked, but seems to be fairly accurate in my use
     if (WiFi.RSSI() > -60) { signalHealth = "GREAT"; }
     if (WiFi.RSSI() <= -60 && WiFi.RSSI() > -70) { signalHealth = "GOOD"; }
     if (WiFi.RSSI() <= -70 && WiFi.RSSI() > -90) { signalHealth = "WEAK"; }
     if (WiFi.RSSI() <= -90 && WiFi.RSSI() > -100) { signalHealth = "BAD"; }
     if (WiFi.RSSI() <= -100) { signalHealth = "*VERY BAD*"; }
   
-    Serial.printf(" . Signal strength: %s, %ddBm\n", signalHealth.c_str(), WiFi.RSSI());
-  }
-  else {
-    Serial.printf(" . NO WIFI CONNECTION INFO AVAILABLE\n");
+    Serial.printf(" . Signal strength: %s, %ddBm. ", signalHealth.c_str(), WiFi.RSSI());
+
+    // dim the LEDs as the signal starts to fade.  Can be turned off by setting FADE_BY_DISTANCE to false
+    if (FADE_BY_DISTANCE) {
+      uint8_t newBrightness = BRIGHTNESS - (-1 * WiFi.RSSI());
+      Serial.printf("(Fading brightness to %d).", newBrightness);
+    }
+
+    Serial.println();  
   }
 
   Serial.println();
@@ -266,8 +285,12 @@ void receivedCallback(uint32_t from, String &jsonString) {
     if (messageAge < MAX_MESSAGE_AGE) {
       // when receiving a KEYFRAME message, only reset the global hue to zero if it's out of sync
       if (255-gHue>12 && 255-gHue<243) { 
-        gHue = 0;
-        Serial.printf("(RESETTING gHue to 0.)");
+        uint32_t newHue = (messageAge/1000)/HUE_DELAY;
+        
+        if (gHue != newHue) { // don't bother setting a new value if they're already in sync
+          gHue = newHue; // testing this out.  Instead of a slightly delayed "reset to zero" message, trying to calculate how far ahead the controller is by the time the message was received.
+          Serial.printf("(RESETTING gHue to %u.)", newHue);
+        }
       }
 
       // clocks must be off if a message has a negative "age"
@@ -275,16 +298,14 @@ void receivedCallback(uint32_t from, String &jsonString) {
         timeErrors++;
 
         if (timeErrors > MAX_TIME_ERRORS) {
-          Serial.printf("    !! ERROR: More than %u time out of bounds errors !!\n", MAX_TIME_ERRORS); 
+          Serial.printf("    !! ERROR: More than %u time out of bounds errors!!\n", MAX_TIME_ERRORS); 
           timeErrors = 0;
         }
       }
-      
       else {
         timeErrors = 0;
       }
     }
-
     else {
       // discard older messages.  Divide by 1,000 to convert microseconds to milliseconds.
       Serial.printf("(IGNORED: message is older than %zu ms.)", MAX_MESSAGE_AGE/1000); 
