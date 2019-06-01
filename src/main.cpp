@@ -16,9 +16,10 @@
 #define DATA_PIN          13           // your board's data pin connected to your LEDs
 #define LED_TYPE          WS2812B      // WS2812B or WS2811?
 #define BRIGHTNESS        128          // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
-#define HUE_DELAY         5            // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
-#define AMOUNT_OF_GLITTER 40           // "glitter" effect applied to the controller node for visual identification.  range: 0-255, 30-50 look good without being overwhelming.
+#define HUE_DELAY         8            // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
+#define AMOUNT_OF_GLITTER 30           // "glitter" effect applied to the controller node for visual identification.  range: 0-255, 30-50 look good without being overwhelming.
 #define FADE_BY_DISTANCE  true         // boolean that makes the brightness of the LEDs based on wifi signal strength.  Set to false if you want them to use the global BRIGHTNESS value instead.
+#define NUM_RAINBOWS      .8           // number of complete rainbows to show on the LED strip at once.  This is the (poorly documented) "deltaHue" variable; basically it determines the increment size of hue shifts between pixels.  Based on my implementation, a value of "1" visually spreads the rainbow effect over the whole strip, "2" will compress it and show two full rainbows patterns, etc.  Values between 0 and 1 (.8 for example) also work, but stretch rather than compress the rainbow on the strip.
 
 // Mesh setup
 #define   MESH_SSID       "LEDMesh01"  // the broadcast name of your little mesh network
@@ -60,8 +61,8 @@ uint8_t gHue = 0;                       // global, rotating color used to shift 
 uint8_t timeErrors = 0;                 // this tracks clock delta errors for received messages.
 
 Scheduler userScheduler;
-painlessMesh mesh;   // first there was mesh,
-CRGB leds[NUM_LEDS]; // then there was light!
+painlessMesh mesh;                      // first there was mesh,
+CRGB leds[NUM_LEDS];                    // then there was light!
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // BASICS
@@ -93,6 +94,7 @@ void loop() {
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 void setupLEDs() {
+  // create an object called "leds" and set brightness
   FastLED.addLeds<LED_TYPE, DATA_PIN, GRB>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(BRIGHTNESS);
 }
@@ -106,7 +108,9 @@ void confetti() {
 }
 
 void addGlitter(fract8 chanceOfGlitter) {
-  if (random8() < chanceOfGlitter) { leds[random16(NUM_LEDS)] += CRGB::White; }
+  if (random8() < chanceOfGlitter) { 
+    leds[random16(NUM_LEDS)] += CRGB::White; 
+  }
 }
 
 void stepAnimation(int displayMode) {
@@ -130,7 +134,7 @@ void stepAnimation(int displayMode) {
       }
       
       // FastLED's built-in rainbow generator
-      fill_rainbow(leds, NUM_LEDS, gHue, 7);
+      fill_rainbow(leds, NUM_LEDS, gHue, 255/NUM_LEDS*NUM_RAINBOWS);
       
       // the controller gets a bit of glitter for visual identification
       if (amController == true) { addGlitter(AMOUNT_OF_GLITTER); }
@@ -150,7 +154,7 @@ void shiftHue() {
     }
   }
 
-  gHue++; // as a uint8_t type value will 'roll over' from 255 back to 0
+  gHue++; // as a uint8_t type, value will 'roll over' from 255 back to 0
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -158,10 +162,7 @@ void shiftHue() {
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 void setupMesh() {
-  Task taskSendMessage( TASK_SECOND*MESSAGE_DELAY, TASK_FOREVER, []() {
-    String msg = String(displayMode);
-    sendMessage(&msg);
-  });
+  Task taskSendMessage( TASK_SECOND*MESSAGE_DELAY, TASK_FOREVER, []() { String msg = String(displayMode); sendMessage(&msg); });
 
   // set before mesh init() so that you can see startup messages
   //mesh.setDebugMsgTypes(ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE); // all types on
@@ -279,16 +280,17 @@ void receivedCallback(uint32_t from, String &jsonString) {
     uint32_t currentTime = mesh.getNodeTime();
     uint32_t messageAge = currentTime - timeStamp;
 
-    Serial.printf(">> KEYFRAME from %u -- Timestamp: %zu, offset: %zu ms. Local gHue is %u. ", from, timeStamp, messageAge/1000, gHue);
+    Serial.printf(" > KEYFRAME from %u -- Timestamp: %zu, offset: %zu ms. Local gHue is %u. ", from, timeStamp, messageAge/1000, gHue);
     
     // message time in transit is within bounds
     if (messageAge < MAX_MESSAGE_AGE) {
-      // when receiving a KEYFRAME message, only reset the global hue to zero if it's out of sync
+      // when receiving a KEYFRAME message, only reset the global hue if it's out of sync
       if (255-gHue>12 && 255-gHue<243) { 
+        // testing this out.  Instead of a slightly delayed "reset to zero" message, trying to calculate how far ahead the controller is by the time the message was received.
         uint32_t newHue = (messageAge/1000)/HUE_DELAY;
         
         if (gHue != newHue) { // don't bother setting a new value if they're already in sync
-          gHue = newHue; // testing this out.  Instead of a slightly delayed "reset to zero" message, trying to calculate how far ahead the controller is by the time the message was received.
+          gHue = newHue; 
           Serial.printf("(RESETTING gHue to %u.)", newHue);
         }
       }
@@ -298,8 +300,8 @@ void receivedCallback(uint32_t from, String &jsonString) {
         timeErrors++;
 
         if (timeErrors > MAX_TIME_ERRORS) {
-          Serial.printf("    !! ERROR: More than %u time out of bounds errors!!\n", MAX_TIME_ERRORS); 
-          timeErrors = 0;
+          Serial.printf("    !! ERROR: More than %u time out-of-bounds errors!!\n", MAX_TIME_ERRORS); 
+          //timeErrors = 0;
         }
       }
       else {
