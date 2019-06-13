@@ -109,6 +109,15 @@ void confetti() {
   leds[pos] += CHSV(aloneHue + random8(32), 200, 255);
 }
 
+void banana_mode() {
+  fadeToBlackBy(leds, NUM_LEDS, 10);
+  uint8_t starthue = 55;
+  uint8_t endhue = 65;
+  
+  fill_gradient(leds, NUM_LEDS, CHSV(starthue,255,255), CHSV(endhue,255,255), FORWARD_HUES);    // If we don't have this, the colour fill will flip around. 
+  addGlitter(AMOUNT_OF_GLITTER * 2);  
+}
+
 void addGlitter(fract8 chanceOfGlitter) {
   if (random8() < chanceOfGlitter) { 
     leds[random16(NUM_LEDS)] += CRGB::White; 
@@ -135,8 +144,15 @@ void stepAnimation(int displayMode) {
         FastLED.setBrightness(newBrightness);
       }
       
-      // FastLED's built-in rainbow generator
-      fill_rainbow(leds, NUM_LEDS, gHue, 255/NUM_LEDS*NUM_RAINBOWS);
+      if (knownControllerID == 1234567890) { // << this number needs to be updated with the controller assigned to Chim
+        banana_mode();
+      }
+      else {
+        // FastLED's built-in rainbow generator
+        fill_rainbow(leds, NUM_LEDS, gHue, 255/NUM_LEDS*NUM_RAINBOWS);
+      }
+      
+      
       
       // the controller gets a bit of glitter for visual identification
       if (amController == true) { addGlitter(AMOUNT_OF_GLITTER); }
