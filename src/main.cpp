@@ -17,7 +17,7 @@
 #define LED_TYPE          WS2812B      // WS2812B or WS2811?
 #define BRIGHTNESS        128          // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
 #define HUE_DELAY         8            // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
-#define AMOUNT_OF_GLITTER 30           // "glitter" effect applied to the controller node for visual identification.  range: 0-255, 30-50 look good without being overwhelming.
+#define AMOUNT_OF_GLITTER 10           // "glitter" effect applied to the controller node for visual identification.  range: 0-255.
 #define FADE_BY_DISTANCE  true         // boolean that makes the brightness of the LEDs based on wifi signal strength.  Set to false if you want them to use the global BRIGHTNESS value instead.
 #define NUM_RAINBOWS      .8           // number of complete rainbows to show on the LED strip at once.  This is the (poorly documented) "deltaHue" variable; basically it determines the increment size of hue shifts between pixels.  Based on my implementation, a value of "1" visually spreads the rainbow effect over the whole strip, "2" will compress it and show two full rainbows patterns, etc.  Values between 0 and 1 (.8 for example) also work, but stretch rather than compress the rainbow on the strip.
 
@@ -29,6 +29,7 @@
 #define   MESSAGE_DELAY   2            // num seconds between broadcast messages
 #define   MAX_MESSAGE_AGE 250000       // num microseconds ago that a message from the controller can be acted upon. (250,000 microseconds = 250 milliseconds(ms), which seems to work well)
 #define   MAX_TIME_ERRORS 3            // num of sequential messages with time/clock errors before triggering a manual time sync (< currently this only logs that there are time errors, haven't added the forced time update yet)
+#define   MAX_WIFI_ERRORS 5            // num of sequential wifi disconnected state messages before restarting wifi connection 
 
 // Mesh states
 #define ALONE     1
@@ -59,6 +60,7 @@ uint8_t aloneHue = random(0,223);       // random color set on each reboot, used
 uint8_t animationDelay = random(5,20);  // random animation speed, between (x,y) milliseconds, used to create a unique color/vibration scheme for each individual light when in "alone" mode
 uint8_t gHue = 0;                       // global, rotating color used to shift the rainbow animation
 uint8_t timeErrors = 0;                 // this tracks clock delta errors for received messages.
+uint8_t wifiErrors = 0;                 // this tracks wifi state errors.  Basically a disconnected / idle state when it's clearly still sending and receiving messages.
 
 Scheduler userScheduler;
 painlessMesh mesh;                      // first there was mesh,
@@ -126,7 +128,7 @@ void stepAnimation(int displayMode) {
     // "rainbow" effect, you're connected!
     case CONNECTED:
       // another data dimension, but might be annoying.  Fades the brightness of the LEDs depending on the wifi signal strength.
-      if (FADE_BY_DISTANCE) {
+      if (FADE_BY_DISTANCE && amController == false) {
         uint8_t newBrightness = BRIGHTNESS - (-1 * WiFi.RSSI());
         //Serial.printf(" Setting brightness to %d\n", newBrightness);
       
@@ -168,7 +170,9 @@ void setupMesh() {
   //mesh.setDebugMsgTypes(ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE); // all types on
   mesh.setDebugMsgTypes(ERROR | MESH_STATUS | STARTUP);
 
-  mesh.init(MESH_SSID, MESH_PASSWORD, &userScheduler, MESH_PORT);
+  if (WiFi.status() != WL_CONNECTED) {
+    mesh.init(MESH_SSID, MESH_PASSWORD, &userScheduler, MESH_PORT);
+  }
   mesh.onReceive(&receivedCallback);
   mesh.onNewConnection(&newConnectionCallback);
   mesh.onChangedConnections(&changedConnectionCallback);
@@ -187,6 +191,31 @@ void updateMesh() {
 
   // animation update
   stepAnimation(displayMode);
+}
+
+// human-readable output for wifi status
+/*
+how the WiFi.status() behaves in different cases:
+  1. if wifi is visible: WiFi.begin() >> WL_DISCONNECTED >> WL_CONNECTED
+  2. if wifi then disappears: >> WL_DISCONNECTED >> WL_NO_SSID_AVAIL
+  3. if wifi is not visible: WiFi.begin() >> WL_DISCONNECTED >> WL_NO_SSID_AVAIL
+  4. if wifi then appears: >> WL_DISCONNECTED >> WL_CONNECTED
+  5. if disconnecting wifi: WiFi.disconnect() >> WL_IDLE_STATUS
+  6. if wifi configuration is wrong (e.g. wrong password): WiFi.begin() >> WL_DISCONNECTED >> WL_CONNECT_FAILED
+  7. I never found an occasion where WiFi.status() is WL_CONNECTION_LOST.
+*/
+const char* wl_status_to_string(wl_status_t status) {
+  switch (status) {
+    case WL_NO_SHIELD: return "INITIALIZING... (or NO SHIELD)";
+    case WL_IDLE_STATUS: return "IDLE";
+    case WL_NO_SSID_AVAIL: return "NO SSID AVAIL";
+    case WL_SCAN_COMPLETED: return "SCAN COMPLETED";
+    case WL_CONNECTED: return "CONNECTED";
+    case WL_CONNECT_FAILED: return "CONNECTION FAILED";
+    case WL_CONNECTION_LOST: return "CONNECTION LOST";
+    case WL_DISCONNECTED: return "DISCONNECTED";
+    default: return "?? WIFI STATUS UNKNOWN ??";
+  }
 }
 
 void controllerElection() {
@@ -217,11 +246,36 @@ void controllerElection() {
     amController = false;
   }
   
-  // RSSI is the relative received signal strength in a wireless environment.  The higher the number, the stronger the signal.
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.printf(" . NO WIFI CONNECTION INFO AVAILABLE\n");
+  // RSSI is the relative received signal strength in a wireless environment.  The higher the number, the stronger the signal.  
+  if (WiFi.status() != WL_CONNECTED) {  // tried: WiFi.localIP().toString() == "0.0.0.0" {
+    Serial.printf(" . NO WIFI CONNECTION INFO AVAILABLE  (Status: %d - %s)", WiFi.status(), wl_status_to_string(WiFi.status()));
+   
+    wifiErrors++;
+
+    if (wifiErrors > MAX_WIFI_ERRORS) {
+      Serial.printf("  !! ERROR: More than %u wifi state errors.  Resetting WiFi connection... ", MAX_WIFI_ERRORS); 
+      
+      // WORK IN PROGRESS -- the wifi state seems to be off at times, causing communication issues
+      // in forums (https://github.com/espressif/arduino-esp32/issues/653) found the below "wifi.*" commands.  They seemed to work, but caused strange behavior where the two nodes would swap states, 
+      // but both still showing either DISCONNECTED or CONNECTED.
+      
+      //WiFi.persistent(false);
+      //WiFi.disconnect();
+      //WiFi.mode(WIFI_OFF);   // this is a temporary line, to be removed after SDK update to 1.5.4
+      //WiFi.mode(WIFI_STA);  
+      //WiFi.begin(MESH_SSID, MESH_PASSWORD);
+      //WiFi.begin();
+
+      // trying now to use the mesh commands to reset things, rather than rip wifi out from under it...
+      mesh.update();
+    
+      wifiErrors = 0;
+    }
+
+    Serial.println();
   }
   else {
+    wifiErrors = 0;
     String signalHealth;
 
     // these values may need to by tweaked, but seems to be fairly accurate in my use
@@ -231,15 +285,15 @@ void controllerElection() {
     if (WiFi.RSSI() <= -90 && WiFi.RSSI() > -100) { signalHealth = "BAD"; }
     if (WiFi.RSSI() <= -100) { signalHealth = "*VERY BAD*"; }
   
-    Serial.printf(" . Signal strength: %s, %ddBm. ", signalHealth.c_str(), WiFi.RSSI());
+    Serial.printf(" . Wifi status: %d - %s.  Signal strength: %s, %ddBm. ", WiFi.status(), wl_status_to_string(WiFi.status()), signalHealth.c_str(), WiFi.RSSI());
 
     // dim the LEDs as the signal starts to fade.  Can be turned off by setting FADE_BY_DISTANCE to false
-    if (FADE_BY_DISTANCE) {
+    if (FADE_BY_DISTANCE && amController == false) {
       uint8_t newBrightness = BRIGHTNESS - (-1 * WiFi.RSSI());
       Serial.printf("(Fading brightness to %d).", newBrightness);
     }
 
-    Serial.println();  
+    Serial.println();
   }
 
   Serial.println();
