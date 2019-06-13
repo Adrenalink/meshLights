@@ -253,7 +253,7 @@ void controllerElection() {
     wifiErrors++;
 
     if (wifiErrors > MAX_WIFI_ERRORS) {
-      Serial.printf("  !! ERROR: More than %u wifi state errors.  Resetting WiFi connection... ", MAX_WIFI_ERRORS); 
+      Serial.printf("  !! ERROR: More than %u wifi state errors.  Resetting WiFi connection... \n", MAX_WIFI_ERRORS); 
       
       // WORK IN PROGRESS -- the wifi state seems to be off at times, causing communication issues
       // in forums (https://github.com/espressif/arduino-esp32/issues/653) found the below "wifi.*" commands.  They seemed to work, but caused strange behavior where the two nodes would swap states, 
@@ -267,7 +267,8 @@ void controllerElection() {
       //WiFi.begin();
 
       // trying now to use the mesh commands to reset things, rather than rip wifi out from under it...
-      mesh.update();
+      mesh.stop();
+      mesh.init(MESH_SSID, MESH_PASSWORD, &userScheduler, MESH_PORT);
     
       wifiErrors = 0;
     }
