@@ -12,24 +12,24 @@
 #include <ArduinoJson.h>
 
 // LED setup
-#define NUM_LEDS          60           // how many LEDs in your strand?
-#define DATA_PIN          13           // your board's data pin connected to your LEDs
-#define LED_TYPE          WS2812B      // WS2812B or WS2811?
-#define BRIGHTNESS        128          // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
-#define HUE_DELAY         8            // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
-#define AMOUNT_OF_GLITTER 10           // "glitter" effect applied to the controller node for visual identification.  range: 0-255.
-#define FADE_BY_DISTANCE  true         // boolean that makes the brightness of the LEDs based on wifi signal strength.  Set to false if you want them to use the global BRIGHTNESS value instead.
-#define NUM_RAINBOWS      .8           // number of complete rainbows to show on the LED strip at once.  This is the (poorly documented) "deltaHue" variable; basically it determines the increment size of hue shifts between pixels.  Based on my implementation, a value of "1" visually spreads the rainbow effect over the whole strip, "2" will compress it and show two full rainbows patterns, etc.  Values between 0 and 1 (.8 for example) also work, but stretch rather than compress the rainbow on the strip.
+#define NUM_LEDS              60           // how many LEDs in your strand?
+#define DATA_PIN              13           // your board's data pin connected to your LEDs
+#define LED_TYPE              WS2812B      // WS2812B or WS2811?
+#define BRIGHTNESS            128          // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
+#define HUE_DELAY             12           // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
+#define AMOUNT_OF_GLITTER     10           // "glitter" effect applied to the controller node for visual identification.  range: 0-255.
+#define FADE_BY_DISTANCE      false        // boolean that makes the brightness of the LEDs based on wifi signal strength.  Set to false if you want them to use the global BRIGHTNESS value instead.
+#define NUM_RAINBOWS          .8           // number of complete rainbows to show on the LED strip at once.  This is the (poorly documented) "deltaHue" variable; basically it determines the increment size of hue shifts between pixels.  Based on my implementation, a value of "1" visually spreads the rainbow effect over the whole strip, "2" will compress it and show two full rainbows patterns, etc.  Values between 0 and 1 (.8 for example) also work, but stretch rather than compress the rainbow on the strip.
 
 // Mesh setup
-#define   MESH_SSID       "LEDMesh01"  // the broadcast name of your little mesh network
-#define   MESH_PASSWORD   "foofoofoo"  // network password
-#define   MESH_PORT       5555         // in a busy space?  Isolate your mesh with a specific port as well
-#define   ELECTION_DELAY  10           // num seconds between forced controller elections
-#define   MESSAGE_DELAY   2            // num seconds between broadcast messages
-#define   MAX_MESSAGE_AGE 250000       // num microseconds ago that a message from the controller can be acted upon. (250,000 microseconds = 250 milliseconds(ms), which seems to work well)
-#define   MAX_TIME_ERRORS 3            // num of sequential messages with time/clock errors before triggering a manual time sync (< currently this only logs that there are time errors, haven't added the forced time update yet)
-#define   MAX_WIFI_ERRORS 5            // num of sequential wifi disconnected state messages before restarting wifi connection 
+#define   MESH_SSID           "LEDMesh01"  // the broadcast name of your little mesh network
+#define   MESH_PASSWORD       "foofoofoo"  // network password
+#define   MESH_PORT           5555         // in a busy space?  Isolate your mesh with a specific port as well
+#define   ELECTION_DELAY      10           // num seconds between forced controller elections
+#define   MESSAGE_DELAY       2            // num seconds between broadcast messages
+#define   MAX_MESSAGE_AGE     250000       // num microseconds ago that a message from the controller can be acted upon. (250,000 microseconds = 250 milliseconds(ms), which seems to work well)
+#define   MAX_TIME_ERRORS     3            // num of sequential messages with time/clock errors before triggering a manual time sync (< currently this only logs that there are time errors, haven't added the forced time update yet)
+#define   SUPER_CONTROLLER_ID 302673549    // this gives you a special node id that changes the animation.  I'm using it for an art car as a special node in the mesh.  It might be used to the effect of a teacher coming into the classroom.
 
 // Mesh states
 #define ALONE     1
@@ -60,7 +60,6 @@ uint8_t aloneHue = random(0,223);       // random color set on each reboot, used
 uint8_t animationDelay = random(5,20);  // random animation speed, between (x,y) milliseconds, used to create a unique color/vibration scheme for each individual light when in "alone" mode
 uint8_t gHue = 0;                       // global, rotating color used to shift the rainbow animation
 uint8_t timeErrors = 0;                 // this tracks clock delta errors for received messages.
-uint8_t wifiErrors = 0;                 // this tracks wifi state errors.  Basically a disconnected / idle state when it's clearly still sending and receiving messages.
 
 Scheduler userScheduler;
 painlessMesh mesh;                      // first there was mesh,
@@ -111,8 +110,8 @@ void confetti() {
 
 void banana_mode() {
   fadeToBlackBy(leds, NUM_LEDS, 10);
-  uint8_t starthue = 55;
-  uint8_t endhue = 65;
+  uint8_t starthue = 45;
+  uint8_t endhue = 70;
   
   fill_gradient(leds, NUM_LEDS, CHSV(starthue,255,255), CHSV(endhue,255,255), FORWARD_HUES);    // If we don't have this, the colour fill will flip around. 
   addGlitter(AMOUNT_OF_GLITTER * 2);  
@@ -139,20 +138,18 @@ void stepAnimation(int displayMode) {
       // another data dimension, but might be annoying.  Fades the brightness of the LEDs depending on the wifi signal strength.
       if (FADE_BY_DISTANCE && amController == false) {
         uint8_t newBrightness = BRIGHTNESS - (-1 * WiFi.RSSI());
-        //Serial.printf(" Setting brightness to %d\n", newBrightness);
+        //Serial.printf(" Setting brightness to %d\n", newBrightness); // careful with this one, prints a lot to the console.
       
         FastLED.setBrightness(newBrightness);
       }
       
-      if (knownControllerID == 1234567890) { // << this number needs to be updated with the controller assigned to Chim
+      if (knownControllerID == SUPER_CONTROLLER_ID) { 
         banana_mode();
       }
       else {
         // FastLED's built-in rainbow generator
         fill_rainbow(leds, NUM_LEDS, gHue, 255/NUM_LEDS*NUM_RAINBOWS);
       }
-      
-      
       
       // the controller gets a bit of glitter for visual identification
       if (amController == true) { addGlitter(AMOUNT_OF_GLITTER); }
@@ -210,16 +207,6 @@ void updateMesh() {
 }
 
 // human-readable output for wifi status
-/*
-how the WiFi.status() behaves in different cases:
-  1. if wifi is visible: WiFi.begin() >> WL_DISCONNECTED >> WL_CONNECTED
-  2. if wifi then disappears: >> WL_DISCONNECTED >> WL_NO_SSID_AVAIL
-  3. if wifi is not visible: WiFi.begin() >> WL_DISCONNECTED >> WL_NO_SSID_AVAIL
-  4. if wifi then appears: >> WL_DISCONNECTED >> WL_CONNECTED
-  5. if disconnecting wifi: WiFi.disconnect() >> WL_IDLE_STATUS
-  6. if wifi configuration is wrong (e.g. wrong password): WiFi.begin() >> WL_DISCONNECTED >> WL_CONNECT_FAILED
-  7. I never found an occasion where WiFi.status() is WL_CONNECTION_LOST.
-*/
 const char* wl_status_to_string(wl_status_t status) {
   switch (status) {
     case WL_NO_SHIELD: return "INITIALIZING... (or NO SHIELD)";
@@ -231,6 +218,17 @@ const char* wl_status_to_string(wl_status_t status) {
     case WL_CONNECTION_LOST: return "CONNECTION LOST";
     case WL_DISCONNECTED: return "DISCONNECTED";
     default: return "?? WIFI STATUS UNKNOWN ??";
+  }
+}
+
+// human-readable output for wifi mode
+const char* wifi_mode_to_string(wifi_mode_t mode) {
+  switch (mode) {
+    case 0: return "OFF (NULL MODE)";
+    case 1: return "STATION";
+    case 2: return "SOFT AP";
+    case 3: return "STATION+AP";
+    default: return "?? WIFI MODE UNKNOWN ??";
   }
 }
 
@@ -262,47 +260,23 @@ void controllerElection() {
     amController = false;
   }
   
-  // RSSI is the relative received signal strength in a wireless environment.  The higher the number, the stronger the signal.  
-  if (WiFi.status() != WL_CONNECTED) {  // tried: WiFi.localIP().toString() == "0.0.0.0" {
-    Serial.printf(" . NO WIFI CONNECTION INFO AVAILABLE  (Status: %d - %s)", WiFi.status(), wl_status_to_string(WiFi.status()));
-   
-    wifiErrors++;
-
-    if (wifiErrors > MAX_WIFI_ERRORS) {
-      Serial.printf("  !! ERROR: More than %u wifi state errors.  Resetting WiFi connection... \n", MAX_WIFI_ERRORS); 
-      
-      // WORK IN PROGRESS -- the wifi state seems to be off at times, causing communication issues
-      // in forums (https://github.com/espressif/arduino-esp32/issues/653) found the below "wifi.*" commands.  They seemed to work, but caused strange behavior where the two nodes would swap states, 
-      // but both still showing either DISCONNECTED or CONNECTED.
-      
-      //WiFi.persistent(false);
-      //WiFi.disconnect();
-      //WiFi.mode(WIFI_OFF);   // this is a temporary line, to be removed after SDK update to 1.5.4
-      //WiFi.mode(WIFI_STA);  
-      //WiFi.begin(MESH_SSID, MESH_PASSWORD);
-      //WiFi.begin();
-
-      // trying now to use the mesh commands to reset things, rather than rip wifi out from under it...
-      mesh.stop();
-      mesh.init(MESH_SSID, MESH_PASSWORD, &userScheduler, MESH_PORT);
+  String ipAddr = WiFi.localIP().toString();
     
-      wifiErrors = 0;
-    }
-
-    Serial.println();
-  }
+  if (ipAddr == "0.0.0.0") {  // tried: WiFi.status() != WL_CONNECTED
+    Serial.printf(" . NO IP ADDRESS - WiFi Mode: %s, Status: %s (IP: %s)\n", wifi_mode_to_string(WiFi.getMode()), wl_status_to_string(WiFi.status()), ipAddr.c_str());
+  }  
   else {
-    wifiErrors = 0;
     String signalHealth;
 
-    // these values may need to by tweaked, but seems to be fairly accurate in my use
+    // RSSI is the relative received signal strength in a wireless environment.  The higher the number, the stronger the signal.
+    // these values may need to by tweaked but seems to be fairly accurate in my use, in terms of "good" vs. "bad".
     if (WiFi.RSSI() > -60) { signalHealth = "GREAT"; }
     if (WiFi.RSSI() <= -60 && WiFi.RSSI() > -70) { signalHealth = "GOOD"; }
     if (WiFi.RSSI() <= -70 && WiFi.RSSI() > -90) { signalHealth = "WEAK"; }
     if (WiFi.RSSI() <= -90 && WiFi.RSSI() > -100) { signalHealth = "BAD"; }
     if (WiFi.RSSI() <= -100) { signalHealth = "*VERY BAD*"; }
   
-    Serial.printf(" . Wifi status: %d - %s.  Signal strength: %s, %ddBm. ", WiFi.status(), wl_status_to_string(WiFi.status()), signalHealth.c_str(), WiFi.RSSI());
+    Serial.printf(" . Wifi Mode: %s, Status: %s. Signal strength: %s, %ddBm. (IP: %s) ", wifi_mode_to_string(WiFi.getMode()), wl_status_to_string(WiFi.status()), signalHealth.c_str(), WiFi.RSSI(), ipAddr.c_str());
 
     // dim the LEDs as the signal starts to fade.  Can be turned off by setting FADE_BY_DISTANCE to false
     if (FADE_BY_DISTANCE && amController == false) {
@@ -315,7 +289,9 @@ void controllerElection() {
 
   Serial.println();
 
-  knownControllerID = lowestNodeID;
+  if (lowestNodeID != 0) { // filtering bad nodes IDs.  At times I've seen nodes rapidly leaving/joining the mesh creates a node ID of "0", which causes problems when the lowest ID is supposed to be the controller.
+    knownControllerID = lowestNodeID;
+  }
 }
 
 // send a broadcast message to all the nodes specifying the new animation mode for all of them
@@ -430,6 +406,7 @@ void sortNodeList(SimpleList<uint32_t> &nodes) {
   while (nodes.size() > 0) {
     // find the smallest one
     smallest_node = nodes.begin();
+    
     for (SimpleList<uint32_t>::iterator node = nodes.begin(); node != nodes.end(); ++node) {
       if (*node < *smallest_node) smallest_node = node;
     }
@@ -439,6 +416,18 @@ void sortNodeList(SimpleList<uint32_t> &nodes) {
     nodes.erase(smallest_node);
   }
 
+/*
+    Sometimes an orphaned node (ID "0") shows up and throws off controller elections.  need to filter it from the list.  
+    Below code really needs to be tested... 
+*/
+    Serial.printf("\n-------------> FIRST NODE IN LIST: %d\n", *nodes_sorted.begin());
+    
+    if (*nodes_sorted.begin() == 0) {
+      Serial.printf(" !! BAD NODE ID DETECTED -- DELETING FROM MESH LIST");
+      nodes_sorted.pop_front(); 
+      Serial.printf("\n-------------> *NEW* FIRST NODE IN LIST: %d\n", *nodes_sorted.begin());
+    }
+ 
   // copy the sorted list back into the now empty nodes list
   for (SimpleList<uint32_t>::iterator node = nodes_sorted.begin(); node != nodes_sorted.end(); ++node) nodes.push_back(*node);
 }
