@@ -235,20 +235,37 @@ const char* wifi_mode_to_string(wifi_mode_t mode) {
 void controllerElection() {
   uint32_t myNodeID = mesh.getNodeId();
   uint32_t lowestNodeID = myNodeID;
-
+  bool badNodeDectected = false;
+  
   SimpleList<uint32_t> nodes;
   nodes = mesh.getNodeList();
 
   Serial.printf("\n>> CONTROLLER ELECTION\n");
   Serial.printf(" . Number of nodes in mesh: %d\n", nodes.size() + 1);
   Serial.printf(" . Mesh members: %u (< this node)", myNodeID);
-
+    
   for (SimpleList<uint32_t>::iterator node = nodes.begin(); node != nodes.end(); ++node) {
     Serial.printf(" %u", *node);
-    if (*node < lowestNodeID) lowestNodeID = *node;
+    
+    // Sometimes an orphaned node (ID "0") shows up and throws off controller elections.  need to filter it from the list.  
+    // Below code really needs to be tested...
+    if (*node == 0) { 
+      badNodeDectected = true;    
+      nodes.remove(0);
+    }
+    else {
+      if (*node < lowestNodeID) { lowestNodeID = *node; }
+    }
   }
 
   Serial.println();
+
+  if (badNodeDectected) {
+    Serial.printf("  --------------------------------------------------\n");
+    Serial.printf("  !! NODE ID \"0\" DETECTED -- DELETING FROM MESH LIST\n");
+    Serial.printf("  --------------------------------------------------\n");
+  }
+
   Serial.printf(" . Election result: ");
 
   if (lowestNodeID == myNodeID) {
@@ -377,7 +394,7 @@ void newConnectionCallback(uint32_t nodeId) {
 
 // this gets called when a node is added or removed from the mesh, so set the controller to the node with the lowest chip id
 void changedConnectionCallback() {
-  Serial.printf("\n > CHANGED CONNECTIONS: %s\n",mesh.subConnectionJson().c_str());
+  Serial.printf("\n > CHANGED CONNECTIONS: %s\n", mesh.subConnectionJson().c_str());
  
   // calling an election when mesh configuration changes
   controllerElection();
@@ -407,26 +424,12 @@ void sortNodeList(SimpleList<uint32_t> &nodes) {
     // find the smallest one
     smallest_node = nodes.begin();
     
-    for (SimpleList<uint32_t>::iterator node = nodes.begin(); node != nodes.end(); ++node) {
-      if (*node < *smallest_node) smallest_node = node;
-    }
+    for (SimpleList<uint32_t>::iterator node = nodes.begin(); node != nodes.end(); ++node) { if (*node < *smallest_node) smallest_node = node; }
 
     // add it to the sorted list and remove it from the old list
     nodes_sorted.push_back(*smallest_node);
     nodes.erase(smallest_node);
   }
-
-/*
-    Sometimes an orphaned node (ID "0") shows up and throws off controller elections.  need to filter it from the list.  
-    Below code really needs to be tested... 
-*/
-    Serial.printf("\n-------------> FIRST NODE IN LIST: %d\n", *nodes_sorted.begin());
-    
-    if (*nodes_sorted.begin() == 0) {
-      Serial.printf(" !! BAD NODE ID DETECTED -- DELETING FROM MESH LIST");
-      nodes_sorted.pop_front(); 
-      Serial.printf("\n-------------> *NEW* FIRST NODE IN LIST: %d\n", *nodes_sorted.begin());
-    }
  
   // copy the sorted list back into the now empty nodes list
   for (SimpleList<uint32_t>::iterator node = nodes_sorted.begin(); node != nodes_sorted.end(); ++node) nodes.push_back(*node);
