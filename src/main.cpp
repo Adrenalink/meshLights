@@ -1,6 +1,10 @@
 /*
- *  Meshed ESP32 nodes with synchronized animation effects
- *  some code was based on FastLED 100 line "demo reel" and LED_Synch_Mesh_Send by Carl F Sutter (2017)
+ *  Meshed ESP32 nodes with synchronized animation effects.
+ * 
+ *  This adds leader election, display/effect logic, additional messaging functionality and error checking to the amazing 
+ *  PainlessMesh and FastLED projects for the sake of keeping LED strands in sync across a mesh.
+ * 
+ *  some of the initial idea was based on FastLED 100 line "demo reel" and LED_Synch_Mesh_Send by Carl F Sutter (2017)
  */
 
 #define FASTLED_INTERNAL               // this needs to come before #include <FastLED.h> to suppress pragma messages during compile time in the Arduino IDE.
@@ -28,7 +32,6 @@
 #define   ELECTION_DELAY      10           // num seconds between forced controller elections
 #define   MESSAGE_DELAY       2            // num seconds between broadcast messages
 #define   MAX_MESSAGE_AGE     250000       // num microseconds ago that a message from the controller can be acted upon. (250,000 microseconds = 250 milliseconds(ms), which seems to work well)
-#define   MAX_TIME_ERRORS     3            // num of sequential messages with time/clock errors before triggering a manual time sync (< currently this only logs that there are time errors, haven't added the forced time update yet)
 #define   SUPER_CONTROLLER_ID 302673549    // this gives you a special node id that changes the animation.  I'm using it for an art car as a special node in the mesh.  It might be used to the effect of a teacher coming into the classroom.
 
 // Mesh states
@@ -138,17 +141,16 @@ void stepAnimation(int displayMode) {
       // another data dimension, but might be annoying.  Fades the brightness of the LEDs depending on the wifi signal strength.
       if (FADE_BY_DISTANCE && amController == false) {
         uint8_t newBrightness = BRIGHTNESS - (-1 * WiFi.RSSI());
-        //Serial.printf(" Setting brightness to %d\n", newBrightness); // careful with this one, prints a lot to the console.
-      
+              
         FastLED.setBrightness(newBrightness);
       }
       
+      // if the "super controller" is in the network use the alternate animation, otherwise, FastLED's built-in rainbow generator
       if (knownControllerID == SUPER_CONTROLLER_ID) { 
-        banana_mode();
+        banana_mode(); 
       }
-      else {
-        // FastLED's built-in rainbow generator
-        fill_rainbow(leds, NUM_LEDS, gHue, 255/NUM_LEDS*NUM_RAINBOWS);
+      else { 
+        fill_rainbow(leds, NUM_LEDS, gHue, 255/NUM_LEDS*NUM_RAINBOWS); 
       }
       
       // the controller gets a bit of glitter for visual identification
@@ -183,9 +185,7 @@ void setupMesh() {
   //mesh.setDebugMsgTypes(ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE); // all types on
   mesh.setDebugMsgTypes(ERROR | MESH_STATUS | STARTUP);
 
-  if (WiFi.status() != WL_CONNECTED) {
-    mesh.init(MESH_SSID, MESH_PASSWORD, &userScheduler, MESH_PORT);
-  }
+  mesh.init(MESH_SSID, MESH_PASSWORD, &userScheduler, MESH_PORT);
   mesh.onReceive(&receivedCallback);
   mesh.onNewConnection(&newConnectionCallback);
   mesh.onChangedConnections(&changedConnectionCallback);
@@ -260,6 +260,7 @@ void controllerElection() {
 
   Serial.println();
 
+  // this is just for visibility.  The clean-up happens very fast when an orphaned node is detected.
   if (badNodeDectected) {
     Serial.printf("  --------------------------------------------------\n");
     Serial.printf("  !! NODE ID \"0\" DETECTED -- DELETING FROM MESH LIST\n");
@@ -276,9 +277,12 @@ void controllerElection() {
     Serial.printf("Node %u is the controller\n", lowestNodeID);
     amController = false;
   }
+
+  // only act on keyframe messages from the known controller in the mesh
+  knownControllerID = lowestNodeID;  
   
   String ipAddr = WiFi.localIP().toString();
-    
+  
   if (ipAddr == "0.0.0.0") {  // tried: WiFi.status() != WL_CONNECTED
     Serial.printf(" . NO IP ADDRESS - WiFi Mode: %s, Status: %s (IP: %s)\n", wifi_mode_to_string(WiFi.getMode()), wl_status_to_string(WiFi.status()), ipAddr.c_str());
   }  
@@ -295,7 +299,7 @@ void controllerElection() {
   
     Serial.printf(" . Wifi Mode: %s, Status: %s. Signal strength: %s, %ddBm. (IP: %s) ", wifi_mode_to_string(WiFi.getMode()), wl_status_to_string(WiFi.status()), signalHealth.c_str(), WiFi.RSSI(), ipAddr.c_str());
 
-    // dim the LEDs as the signal starts to fade.  Can be turned off by setting FADE_BY_DISTANCE to false
+    // dim the LEDs as the signal starts to fade.  Can be turned off by setting FADE_BY_DISTANCE to false.  Doesn't apply to the elected controller.
     if (FADE_BY_DISTANCE && amController == false) {
       uint8_t newBrightness = BRIGHTNESS - (-1 * WiFi.RSSI());
       Serial.printf("(Fading brightness to %d).", newBrightness);
@@ -305,10 +309,6 @@ void controllerElection() {
   }
 
   Serial.println();
-
-  if (lowestNodeID != 0) { // filtering bad nodes IDs.  At times I've seen nodes rapidly leaving/joining the mesh creates a node ID of "0", which causes problems when the lowest ID is supposed to be the controller.
-    knownControllerID = lowestNodeID;
-  }
 }
 
 // send a broadcast message to all the nodes specifying the new animation mode for all of them
