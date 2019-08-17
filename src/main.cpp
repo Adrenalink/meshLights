@@ -21,15 +21,15 @@
 #define LED_TYPE              WS2812B      // WS2812B or WS2811?
 #define BRIGHTNESS            128          // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
 #define HUE_DELAY             12           // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
-#define AMOUNT_OF_GLITTER     10           // "glitter" effect applied to the controller node for visual identification.  range: 0-255.
+#define AMOUNT_OF_GLITTER     5            // "glitter" effect applied to the controller node for visual identification.  range: 0-255.
 #define FADE_BY_DISTANCE      false        // boolean that makes the brightness of the LEDs based on wifi signal strength.  Set to false if you want them to use the global BRIGHTNESS value instead.
-#define NUM_RAINBOWS          .8           // number of complete rainbows to show on the LED strip at once.  This is the (poorly documented) "deltaHue" variable; basically it determines the increment size of hue shifts between pixels.  Based on my implementation, a value of "1" visually spreads the rainbow effect over the whole strip, "2" will compress it and show two full rainbows patterns, etc.  Values between 0 and 1 (.8 for example) also work, but stretch rather than compress the rainbow on the strip.
+#define NUM_RAINBOWS          .25          // number of complete rainbows to show on the LED strip at once.  This is the (poorly documented) "deltaHue" variable; basically it determines the increment size of hue shifts between pixels.  Based on my implementation, a value of "1" visually spreads the rainbow effect over the whole strip, "2" will compress it and show two full rainbows patterns, etc.  Values between 0 and 1 (.8 for example) also work, but stretch rather than compress the rainbow on the strip.
 
 // Mesh setup
 #define   MESH_SSID           "LEDMesh01"  // the broadcast name of your little mesh network
 #define   MESH_PASSWORD       "foofoofoo"  // network password
 #define   MESH_PORT           5555         // in a busy space?  Isolate your mesh with a specific port as well
-#define   ELECTION_DELAY      10           // num seconds between forced controller elections
+#define   ELECTION_DELAY      6            // num seconds between forced controller elections
 #define   MESSAGE_DELAY       2            // num seconds between broadcast messages
 #define   MAX_MESSAGE_AGE     250000       // num microseconds ago that a message from the controller can be acted upon. (250,000 microseconds = 250 milliseconds(ms), which seems to work well)
 #define   SUPER_CONTROLLER_ID 302673549    // this gives you a special node id that changes the animation.  I'm using it for an art car as a special node in the mesh.  It might be used to the effect of a teacher coming into the classroom.
@@ -60,9 +60,8 @@ bool amController = false;              // flag to designate that this node is t
 long knownControllerID = 0;             // a little validation that you're getting broadcasts from who you expect.  Gets set during a controller election.
 uint8_t displayMode = ALONE;            // animation type -- init animation as single node.  Can be set to either ALONE or CONNECTED.
 uint8_t aloneHue = random(0,223);       // random color set on each reboot, used for the color in the "alone" animation, 223 gives room for a random number 0-32 to be added for confetti effect.
-uint8_t animationDelay = random(5,20);  // random animation speed, between (x,y) milliseconds, used to create a unique color/vibration scheme for each individual light when in "alone" mode
+uint8_t animationDelay = random(8,18);  // random animation speed, between (x,y) milliseconds, used to create a unique color/vibration scheme for each individual light when in "alone" mode
 uint8_t gHue = 0;                       // global, rotating color used to shift the rainbow animation
-uint8_t timeErrors = 0;                 // this tracks clock delta errors for received messages.
 
 Scheduler userScheduler;
 painlessMesh mesh;                      // first there was mesh,
@@ -357,19 +356,6 @@ void receivedCallback(uint32_t from, String &jsonString) {
           gHue = newHue; 
           Serial.printf("(RESETTING gHue to %u.)", newHue);
         }
-      }
-
-      // clocks must be off if a message has a negative "age"
-      if (messageAge < 0) {
-        timeErrors++;
-
-        if (timeErrors > MAX_TIME_ERRORS) {
-          Serial.printf("    !! ERROR: More than %u time out-of-bounds errors!!\n", MAX_TIME_ERRORS); 
-          //timeErrors = 0;
-        }
-      }
-      else {
-        timeErrors = 0;
       }
     }
     else {
