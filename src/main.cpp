@@ -21,7 +21,7 @@
 #define LED_TYPE              WS2812B      // WS2812B or WS2811?
 #define BRIGHTNESS            128          // built-in with FastLED, range: 0-255 (recall that each pixel uses ~60mA when set to white at full brightness, so full strip power consumption is roughly: 60mA * NUM_LEDs * (BRIGHTNESS / 255)
 #define HUE_DELAY             12           // num milliseconds (ms) between hue shifts.  Drop this number to speed up the rainbow effect, raise it to slow it down.
-#define AMOUNT_OF_GLITTER     5            // "glitter" effect applied to the controller node for visual identification.  range: 0-255.
+#define AMOUNT_OF_GLITTER     10           // "glitter" effect applied to the controller node for visual identification.  range: 0-255.
 #define FADE_BY_DISTANCE      false        // boolean that makes the brightness of the LEDs based on wifi signal strength.  Set to false if you want them to use the global BRIGHTNESS value instead.
 #define NUM_RAINBOWS          .25          // number of complete rainbows to show on the LED strip at once.  This is the (poorly documented) "deltaHue" variable; basically it determines the increment size of hue shifts between pixels.  Based on my implementation, a value of "1" visually spreads the rainbow effect over the whole strip, "2" will compress it and show two full rainbows patterns, etc.  Values between 0 and 1 (.8 for example) also work, but stretch rather than compress the rainbow on the strip.
 
@@ -29,11 +29,11 @@
 #define   MESH_SSID           "LEDMesh01"  // the broadcast name of your little mesh network
 #define   MESH_PASSWORD       "foofoofoo"  // network password
 #define   MESH_PORT           5555         // in a busy space?  Isolate your mesh with a specific port as well
-#define   ELECTION_DELAY      6            // num seconds between forced controller elections
+#define   ELECTION_DELAY      10           // num seconds between forced controller elections
 #define   MESSAGE_DELAY       2            // num seconds between broadcast messages
 #define   MAX_MESSAGE_AGE     250000       // num microseconds ago that a message from the controller can be acted upon. (250,000 microseconds = 250 milliseconds(ms), which seems to work well)
-#define   SUPER_CONTROLLER_ID 302673549    // this gives you a special node id that changes the animation.  I'm using it for an art car as a special node in the mesh.  It might be used to the effect of a teacher coming into the classroom.
-
+#define   SUPER_CONTROLLER_ID 302673429    // this gives you a special node id that changes the animation.  I'm using it for an art car as a special node in the mesh.  It might be used to the effect of a teacher coming into the classroom.
+  
 // Mesh states
 #define ALONE     1
 #define CONNECTED 2
